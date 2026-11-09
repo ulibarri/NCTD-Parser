@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= t('app.title') %></title>
+  <link rel="icon" href="/img/nctd-logo.png" />
+  <link rel="stylesheet" href="/vendor/pico/pico.min.css" />
+  <link rel="stylesheet" href="/vendor/tabulator/css/tabulator_simple.min.css" />
+  <link rel="stylesheet" href="/css/theme.css" />
+</head>
+<body>
+  <main class="container">
+
+    <!-- Logos: CFS left, empty middle column, NCTD right -->
+    <div class="logo-row">
+      <img src="/img/cfs-logo.webp" alt="CFS Transportation" class="logo logo-left" />
+      <div class="logo-spacer" aria-hidden="true"></div>
+      <img src="/img/nctd-logo.png" alt="North County Transit District" class="logo logo-right" />
+    </div>
+
+    <header class="page-header">
+      <div class="header-left">
+        <h1 class="page-title" data-i18n="app.title"><%= t('app.title') %></h1>
+        <p class="hint subtitle" data-i18n="app.subtitle"><%= t('app.subtitle') %></p>
+      </div>
+      <div class="header-right">
+        <label class="lang-select">
+          <span data-i18n="app.language"><%= t('app.language') %></span>
+          <select id="langSelect">
+            <option value="es" <%= lang === 'es' ? 'selected' : '' %>>Español</option>
+            <option value="en" <%= lang === 'en' ? 'selected' : '' %>>English</option>
+          </select>
+        </label>
+      </div>
+    </header>
+
+    <!-- ===== Sección 1: Datos que serán procesados ===== -->
+    <section class="card" id="section1">
+      <h2 data-i18n="s1.title"><%= t('s1.title') %></h2>
+      <p class="hint" data-i18n="s1.hint"><%= t('s1.hint') %></p>
+
+      <div class="upload-grid">
+        <article class="upload-card">
+          <header class="result-head">
+            <h3 data-i18n="s1.viajes"><%= t('s1.viajes') %></h3>
+            <small class="file-info" id="viajesInfo" data-i18n="s1.noFile"><%= t('s1.noFile') %></small>
+          </header>
+          <label>
+            <span data-i18n="s1.viajes.accept"><%= t('s1.viajes.accept') %></span>
+            <input type="file" id="viajesFile" accept=".xlsx,.csv" />
+          </label>
+          <p class="status" id="viajesStatus" role="status"></p>
+          <div id="viajesGrid" class="grid-box"></div>
+        </article>
+
+        <article class="upload-card">
+          <header class="result-head">
+            <h3 data-i18n="s1.pasajeros"><%= t('s1.pasajeros') %></h3>
+            <small class="file-info" id="pasajerosInfo" data-i18n="s1.noFile"><%= t('s1.noFile') %></small>
+          </header>
+          <label>
+            <span data-i18n="s1.pasajeros.accept"><%= t('s1.pasajeros.accept') %></span>
+            <input type="file" id="pasajerosFile" accept=".csv" />
+          </label>
+          <p class="status" id="pasajerosStatus" role="status"></p>
+          <div id="pasajerosGrid" class="grid-box"></div>
+        </article>
+      </div>
+
+      <!-- Sub sección: cambio de fecha -->
+      <article class="date-change" id="dateChange">
+        <label class="date-toggle">
+          <input type="checkbox" role="switch" id="dateToggle" disabled />
+          <span data-i18n="date.toggle"><%= t('date.toggle') %></span>
+        </label>
+        <fieldset id="dateFields" disabled>
+          <div class="date-row">
+            <p class="current-date">
+              <span data-i18n="date.current"><%= t('date.current') %></span>
+              <strong id="currentDate">—</strong>
+            </p>
+            <label class="date-input">
+              <span data-i18n="date.new"><%= t('date.new') %></span>
+              <input type="date" id="newDate" />
+            </label>
+            <button type="button" id="applyDateBtn" class="btn-primary" disabled data-i18n="date.apply"><%= t('date.apply') %></button>
+          </div>
+          <p class="status" id="dateStatus" role="status"></p>
+          <h4 class="sub-title" data-i18n="date.preview"><%= t('date.preview') %></h4>
+          <div id="changedGrid" class="grid-box"></div>
+        </fieldset>
+      </article>
+
+      <div class="process-row">
+        <button type="button" id="processBtn" class="btn-primary" disabled data-i18n="s1.process"><%= t('s1.process') %></button>
+        <p class="status" id="processStatus" role="status"></p>
+      </div>
+    </section>
+
+    <!-- ===== Sección 2: Resultados y búsqueda ===== -->
+    <section class="card is-disabled" id="section2" aria-disabled="true">
+      <h2 data-i18n="s2.title"><%= t('s2.title') %></h2>
+      <p class="hint" id="section2Hint" data-i18n="s2.hint"><%= t('s2.hint') %></p>
+
+      <div id="summary" class="summary" hidden></div>
+
+      <div class="downloads" id="downloads" hidden>
+        <a id="dlOutput" class="secondary" role="button" href="#" download>⬇ <span data-i18n="s2.download.output"><%= t('s2.download.output') %></span> <small class="fname"></small></a>
+        <a id="dlPasajeros" class="secondary" role="button" href="#" download>⬇ <span data-i18n="s2.download.pasajeros"><%= t('s2.download.pasajeros') %></span> <small class="fname"></small></a>
+        <a id="dlInvalid" class="secondary" role="button" href="#" download hidden>⬇ <span data-i18n="s2.download.invalid"><%= t('s2.download.invalid') %></span> <small class="fname"></small></a>
+      </div>
+
+      <form id="searchForm" class="search-row" role="search">
+        <label for="searchInput" class="visually-hidden" data-i18n="s2.search"><%= t('s2.search') %></label>
+        <input type="search" id="searchInput" data-i18n-placeholder="s2.search.placeholder" placeholder="<%= t('s2.search.placeholder') %>" disabled />
+        <button type="submit" id="searchBtn" class="btn-accent" disabled data-i18n="s2.search.button"><%= t('s2.search.button') %></button>
+        <button type="button" id="clearBtn" class="secondary outline" disabled data-i18n="s2.search.clear"><%= t('s2.search.clear') %></button>
+      </form>
+
+      <!-- Collapsed until there are results to preview -->
+      <div id="outputGrid" class="grid-box grid-tall" hidden></div>
+      <p class="count-text" id="outputCount" hidden></p>
+    </section>
+
+    <footer class="brand-footer">
+      <small><span data-i18n="app.footer"><%= t('app.footer') %></span> · rules v<%= rulesVersion %></small>
+    </footer>
+  </main>
+
+  <script type="application/json" id="i18nData"><%- i18nJson %></script>
+  <script type="application/json" id="outputColumns"><%- JSON.stringify(destinationColumns) %></script>
+  <script src="/vendor/tabulator/js/tabulator.min.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

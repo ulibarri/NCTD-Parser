@@ -1,0 +1,801 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "specification": {
+    "id": "nctd-manifest-parser",
+    "name": "NCTD Manifest Parser",
+    "organization": "North County Transit District",
+    "version": "1.3.0",
+    "status": "implementation-ready",
+    "target_runtime": "Node.js",
+    "updated": "2026-11-09",
+    "description": "Machine-readable rules for parsing NCTD manifests into TOBI-compatible Destination and Invalid Trips CSV outputs.",
+    "changelog": [
+      {
+        "version": "1.3.0",
+        "date": "2026-11-09",
+        "changes": [
+          "Added trip_date_override: optional replacement of TripDate before processing.",
+          "Journey ID and Leg ID use the effective trip date, so they change when the trip date is changed.",
+          "Added trip_date_constraints: one TripDate per Source file; pickup and dropoff on the same day.",
+          "Added exception UNKNOWN_PASSENGER_TYPE (error) for Passenger Ty values outside passenger_types.",
+          "Added acceptance tests AT-14 to AT-17.",
+          "Confirmed: Pickup Gate Code drops the leading # (GATE CODE #7444 -> 7444).",
+          "Confirmed: rows with an unknown Passenger Ty go to Invalid Trips with UNKNOWN_PASSENGER_TYPE."
+        ]
+      },
+      {
+        "version": "1.2.0",
+        "date": "2026-11-09",
+        "changes": [
+          "Previous baseline."
+        ]
+      }
+    ]
+  },
+  "architecture": {
+    "authoritative_component": "centralized parsing and identifier service",
+    "clients": [
+      "WebApp",
+      "API",
+      "chatbot"
+    ],
+    "production_registry": "shared transactional datastore",
+    "recommended_database": "PostgreSQL",
+    "json_registry_usage": [
+      "local development",
+      "single-process prototype"
+    ],
+    "journey_fingerprint_retention_hours": 72
+  },
+  "file_contract": {
+    "accepted_source_formats": [
+      "xlsx",
+      "csv"
+    ],
+    "outputs": {
+      "destination": {
+        "format": "csv",
+        "contains": "valid parsed records only"
+      },
+      "invalid_trips": {
+        "format": "csv",
+        "contains": "complete original invalid Source rows",
+        "additional_columns": [
+          "Source Row Number",
+          "Validation Status",
+          "Invalid Fields",
+          "Validation Errors"
+        ]
+      }
+    }
+  },
+  "trip_date_constraints": {
+    "single_trip_date_per_file": true,
+    "same_day_trips": true,
+    "description": "Every valid row in a Source file shares one TripDate. NCTD trips always start and end on the same day, so Pickup Time and Dropoff Time use the same date and never cross midnight.",
+    "multiple_dates_action": {
+      "code": "MULTIPLE_TRIP_DATES",
+      "severity": "error",
+      "effect": "Block trip_date_override and report the distinct dates found."
+    }
+  },
+  "source_columns": [
+    "Client Name",
+    "Client ID",
+    "TripDate",
+    "PUTime",
+    "PUAddress",
+    "PUCity",
+    "PUZipcode",
+    "DOAddress",
+    "DOCity",
+    "DOZipcode",
+    "DNLA",
+    "MapQMiles",
+    "Assisted",
+    "PickUpLocationName",
+    "DropLocationName",
+    "Passenger Ty",
+    "Space Type",
+    "Amount",
+    "DOAppt",
+    "Comments",
+    "NoClients",
+    "PULat",
+    "PULon",
+    "DOLat",
+    "DOLon",
+    "Subtype",
+    "FareType",
+    "CashTck",
+    "Run Name"
+  ],
+  "destination_columns": [
+    "Journey ID",
+    "Leg ID",
+    "Last Name",
+    "First Name",
+    "Middle Name",
+    "Tobi MRN",
+    "Trip Date",
+    "Pickup Time",
+    "Dropoff Time",
+    "Mode",
+    "Service Area",
+    "Pickup Address",
+    "Pickup Suite",
+    "Pickup City",
+    "Pickup State",
+    "Pickup Zip",
+    "Dropoff Address",
+    "Dropoff Suite",
+    "Dropoff City",
+    "Dropoff State",
+    "Dropoff Zip",
+    "Booking Fare",
+    "Pickup Gate Code",
+    "Primary Phone",
+    "Secondary Phone",
+    "Tobi Tags",
+    "Trip Purpose",
+    "Leg Notes",
+    "Booking Notes",
+    "Seating Need",
+    "Service Type"
+  ],
+  "processing_pipeline": [
+    "read_source",
+    "preserve_original_rows",
+    "apply_trip_date_override",
+    "validate_required_fields",
+    "route_invalid_rows",
+    "normalize_valid_rows",
+    "remove_exact_duplicates",
+    "classify_passengers",
+    "create_leg_groups",
+    "associate_assistants",
+    "detect_journeys",
+    "assign_leg_sequence",
+    "reuse_or_generate_journey_id",
+    "generate_leg_id",
+    "map_destination_fields",
+    "validate_destination",
+    "write_destination_csv",
+    "write_invalid_trips_csv",
+    "write_summary"
+  ],
+  "required_field_validation": {
+    "fields": [
+      "Client Name",
+      "Client ID",
+      "TripDate",
+      "PUTime",
+      "PUAddress",
+      "PUCity",
+      "PUZipcode",
+      "DOAddress",
+      "DOCity",
+      "DOZipcode"
+    ],
+    "missing_markers_case_insensitive": [
+      "",
+      "EMPTY",
+      "N/A",
+      "NA",
+      "NULL",
+      "NONE"
+    ],
+    "format_rules": {
+      "TripDate": [
+        "Excel serial date",
+        "MM/DD/YYYY",
+        "MM/DD/YY",
+        "YYYY-MM-DD"
+      ],
+      "PUTime": [
+        "Excel fractional day",
+        "HH:mm",
+        "HH:mm:ss"
+      ],
+      "PUZipcode": "^[0-9]{5}(?:-[0-9]{4})?$",
+      "DOZipcode": "^[0-9]{5}(?:-[0-9]{4})?$"
+    },
+    "invalid_action": {
+      "route_to": "invalid_trips",
+      "status": "INVALID",
+      "do_not": [
+        "repair or infer data",
+        "assign Journey ID",
+        "assign Leg ID",
+        "consume Journey sequence",
+        "participate in grouping"
+      ]
+    }
+  },
+  "trip_date_override": {
+    "enabled_by_default": false,
+    "trigger": "User enables the change-date option and selects a new date.",
+    "input_format": "YYYY-MM-DD",
+    "source_field": "TripDate",
+    "effective_trip_date": "The new date when the override is applied; otherwise the original normalized TripDate.",
+    "apply_to": "every Source row whose original TripDate is valid",
+    "rows_with_missing_or_invalid_TripDate": "Leave unchanged; they are routed to invalid_trips by required_field_validation.",
+    "unchanged_fields": [
+      "PUTime",
+      "DOAppt"
+    ],
+    "preserve_original_values": true,
+    "invalid_trips_output": "Write the original Source row values, including the original TripDate.",
+    "affected_destination_fields": {
+      "Trip Date": "effective trip date",
+      "Pickup Time": "effective trip date + PUTime",
+      "Dropoff Time": "effective trip date + DOAppt; empty when DOAppt is empty",
+      "Journey ID": "YYMMDD prefix from the effective trip date",
+      "Leg ID": "embeds the Journey ID built from the effective trip date"
+    },
+    "identifier_rule": "Journey ID, Leg ID, the leg group key, journey detection and the journey fingerprint all use the effective trip date, never the original TripDate, when an override is applied.",
+    "example": {
+      "original_TripDate": "2026-10-23",
+      "new_trip_date": "2026-11-12",
+      "Trip Date": "2026-10-23 00:00:00.000 -> 2026-11-12 00:00:00.000",
+      "Pickup Time": "2026-10-23 07:55:00.000 -> 2026-11-12 07:55:00.000",
+      "Dropoff Time": "2026-10-23 09:30:00.000 -> 2026-11-12 09:30:00.000",
+      "Journey ID": "2610230001 -> 2611120001",
+      "Leg ID": "82475_2610230001_A -> 82475_2611120001_A"
+    },
+    "blocked_when": [
+      "MULTIPLE_TRIP_DATES"
+    ]
+  },
+  "normalization": {
+    "trim_strings": true,
+    "collapse_whitespace_fields": [
+      "Client Name",
+      "PUAddress",
+      "PUCity",
+      "DOAddress",
+      "DOCity",
+      "PickUpLocationName",
+      "DropLocationName",
+      "Comments"
+    ],
+    "preserve_original_values": true,
+    "destination_datetime_format": "YYYY-MM-DD HH:mm:ss.SSS"
+  },
+  "exact_duplicate_rule": {
+    "definition": "Every normalized Source column is identical.",
+    "action": "retain first and remove later exact copies",
+    "code": "EXACT_DUPLICATE_REMOVED",
+    "do_not_use_as_duplicate_key": [
+      "Journey ID",
+      "Leg ID",
+      "Leg Group Key"
+    ]
+  },
+  "passenger_types": {
+    "CLI": {
+      "meaning": "Client",
+      "classification": "client"
+    },
+    "PCA": {
+      "meaning": "Personal Care Assistant",
+      "classification": "assistant"
+    },
+    "COM": {
+      "meaning": "Companion",
+      "classification": "assistant",
+      "equivalent_to": "PCA"
+    },
+    "COMP": {
+      "meaning": "Companion",
+      "classification": "assistant",
+      "equivalent_to": "PCA"
+    }
+  },
+  "passenger_types_unknown": {
+    "action": "route_to invalid_trips",
+    "exception": "UNKNOWN_PASSENGER_TYPE",
+    "status": "confirmed 2026-11-09",
+    "description": "Rows whose Passenger Ty is not CLI, PCA, COM or COMP get no Journey ID or Leg ID and are written to Invalid Trips with Validation Status EXCEPTION."
+  },
+  "field_rules": {
+    "client_name": {
+      "source": "Client Name",
+      "split_at_first": ",",
+      "targets": {
+        "left": "Last Name",
+        "right": "First Name",
+        "Middle Name": ""
+      },
+      "assistant_name_suffix": {
+        "when_passenger_type_in": [
+          "PCA",
+          "COM",
+          "COMP"
+        ],
+        "suffix": " - PCA",
+        "idempotent": true,
+        "apply_before_split": true
+      }
+    },
+    "tobi_mrn": {
+      "source": "Client ID",
+      "target": "Tobi MRN",
+      "pca_rule": {
+        "when": {
+          "Passenger Ty": "PCA"
+        },
+        "append_suffix": "_PCA",
+        "idempotent": true
+      },
+      "non_pca_behavior": "preserve normalized Client ID",
+      "important": "Journey and Leg grouping use original Source Client ID, never suffixed Tobi MRN. COM and COMP do not receive _PCA unless a future approved rule changes this."
+    },
+    "pickup_address": {
+      "source": "PUAddress",
+      "targets": {
+        "street": "Pickup Address",
+        "secondary": "Pickup Suite",
+        "PUCity": "Pickup City",
+        "PUZipcode": "Pickup Zip"
+      },
+      "constant": {
+        "Pickup State": "CA"
+      },
+      "secondary_indicators": [
+        "APT",
+        "APARTMENT",
+        "STE",
+        "SUITE",
+        "UNIT",
+        "SP",
+        "SPC",
+        "SPACE",
+        "#",
+        "standalone trailing unit"
+      ]
+    },
+    "dropoff_address": {
+      "source": "DOAddress",
+      "targets": {
+        "street": "Dropoff Address",
+        "secondary": "Dropoff Suite",
+        "DOCity": "Dropoff City",
+        "DOZipcode": "Dropoff Zip"
+      },
+      "constant": {
+        "Dropoff State": "CA"
+      },
+      "secondary_indicators": [
+        "APT",
+        "APARTMENT",
+        "STE",
+        "SUITE",
+        "UNIT",
+        "SP",
+        "SPC",
+        "SPACE",
+        "#",
+        "standalone trailing unit"
+      ]
+    },
+    "dates_and_times": {
+      "TripDate": "Trip Date",
+      "TripDate+PUTime": "Pickup Time",
+      "TripDate+DOAppt": "Dropoff Time",
+      "format": "YYYY-MM-DD HH:mm:ss.SSS",
+      "date_source": "effective trip date (see trip_date_override)",
+      "TripDate+DOAppt_when_DOAppt_empty": "empty"
+    },
+    "mode": {
+      "target": "Mode",
+      "default": "Ambulette",
+      "type": "text",
+      "apply_to": "every valid row"
+    },
+    "service_area": {
+      "target": "Service Area",
+      "default": "NCTD Service Area",
+      "type": "text",
+      "apply_to": "every valid row"
+    },
+    "booking_fare": {
+      "source": "Amount",
+      "target": "Booking Fare",
+      "type": "number",
+      "rule": "If parsed numeric value is greater than 0 use it; otherwise use 0.",
+      "default": 0,
+      "minimum": 0,
+      "remove_currency_symbols": true
+    },
+    "phones": {
+      "source": "Comments",
+      "normalization": "digits only",
+      "valid_phone": "10-digit US number; allow common separators, parentheses, labels, spacing, optional country code 1",
+      "Primary Phone": {
+        "use": "first valid",
+        "default": "9876543210"
+      },
+      "Secondary Phone": {
+        "use": "second valid",
+        "default": ""
+      },
+      "maximum": 2
+    },
+    "pickup_gate_code": {
+      "source": "Comments",
+      "target": "Pickup Gate Code",
+      "detect": "GATE CODE followed by code",
+      "strip_leading_characters": [
+        "#",
+        ":",
+        "-"
+      ],
+      "example": {
+        "Comments": "GATE CODE #7444",
+        "Pickup Gate Code": "7444"
+      },
+      "status": "confirmed 2026-11-09"
+    },
+    "tobi_tags": {
+      "target": "Tobi Tags",
+      "delimiter": ", ",
+      "deduplicate": true,
+      "rules": [
+        {
+          "value": "CBLA",
+          "phrases": [
+            "DO NOT LEAVE ALONE",
+            "DO NOT LEAVE UNATTENDED",
+            "CANNOT BE LEFT ALONE"
+          ]
+        },
+        {
+          "value": "Visually Impaired",
+          "phrases": [
+            "VISUALLY IMPAIRED",
+            "VISIUALLY IMPAIRED",
+            "VISUAL IMPAIRMENT",
+            "LEGALLY BLIND",
+            "BLIND",
+            "ONE EYE BLIND",
+            "1 EYE BLIND"
+          ]
+        }
+      ]
+    },
+    "booking_notes": {
+      "source": "Comments",
+      "target": "Booking Notes",
+      "delimiter": ", ",
+      "deduplicate": true,
+      "append_rules": [
+        {
+          "when": {
+            "Space Type": "LR"
+          },
+          "value": "Lift Required"
+        }
+      ]
+    },
+    "trip_purpose": {
+      "sources": [
+        "PickUpLocationName",
+        "DropLocationName"
+      ],
+      "mapping": {
+        "ALZHEIMERS": "Glenner",
+        "DIALYSIS": "Dialysis",
+        "BEACONS": "Day Center",
+        "LIFE OF LIBERTY": "Day Center",
+        "STEPPING STONE ADULT DAYCARE": "Day Center"
+      },
+      "default": "Appointment"
+    },
+    "leg_notes": {
+      "target": "Leg Notes",
+      "delimiter": " | ",
+      "omit_blank": true,
+      "parts": [
+        {
+          "source": "PickUpLocationName",
+          "prefix": "PULN: "
+        },
+        {
+          "source": "DropLocationName",
+          "prefix": "DOLN: "
+        }
+      ]
+    },
+    "space_type": {
+      "source": "Space Type",
+      "targets": [
+        "Seating Need",
+        "Service Type"
+      ],
+      "mapping": {
+        "AM": "Ambulatory",
+        "LR": "Ambulatory",
+        "SC": "Bariatric Wheelchair",
+        "WH": "Wheelchair",
+        "XW": "Bariatric Wheelchair"
+      },
+      "default": "Ambulatory",
+      "LR_booking_note": "Lift Required"
+    }
+  },
+  "journey_leg_rules": {
+    "leg_group_key": [
+      "Client ID",
+      "TripDate",
+      "PUTime",
+      "PUAddress",
+      "PUCity",
+      "PUZipcode",
+      "DOAddress",
+      "DOCity",
+      "DOZipcode"
+    ],
+    "excluded_from_leg_group_key": [
+      "Passenger Ty",
+      "Comments"
+    ],
+    "same_leg_rows_share": [
+      "Journey ID",
+      "Leg sequence",
+      "Leg ID"
+    ],
+    "assistant_association": {
+      "must_match_cli_on_leg_group_key": true,
+      "orphan_exception": "ASSISTANT_WITHOUT_CLIENT",
+      "multiple_cli_exception": "MULTIPLE_CLIENTS_SAME_LEG"
+    },
+    "journey_detection": {
+      "partition_by": [
+        "Client ID",
+        "TripDate"
+      ],
+      "pair_when": [
+        "second PUTime is later",
+        "Leg A pickup exactly equals Leg B dropoff",
+        "Leg A dropoff exactly equals Leg B pickup"
+      ],
+      "location_components": [
+        "street",
+        "suite when available",
+        "city",
+        "ZIP"
+      ],
+      "fuzzy_matching": false,
+      "no_return": "single-leg Journey",
+      "partition_date_source": "effective trip date"
+    },
+    "leg_sequence": {
+      "single_leg": "A",
+      "two_leg_earlier": "A",
+      "two_leg_later": "B",
+      "allowed": [
+        "A",
+        "B"
+      ],
+      "synthetic_B": false
+    },
+    "journey_id": {
+      "target": "Journey ID",
+      "format": "YYMMDD####",
+      "type": "text",
+      "length": 10,
+      "sequence_scope": "effective trip date (service date)",
+      "start": 1,
+      "width": 4,
+      "maximum_per_day": 9999,
+      "increment_per": "new Journey",
+      "shared_by_all_legs_and_passengers": true,
+      "date_source": "effective trip date (see trip_date_override)"
+    },
+    "fingerprint": {
+      "components": [
+        "normalized Client ID",
+        "normalized TripDate",
+        "Leg A transportation identity",
+        "Leg B transportation identity when present",
+        "chronological Leg sequence"
+      ],
+      "exclude": [
+        "Passenger Ty",
+        "Comments"
+      ],
+      "recommended_hash": "SHA-256",
+      "registry_fields": [
+        "fingerprint",
+        "journeyId",
+        "createdAt",
+        "expiresAt"
+      ],
+      "retention_hours": 72,
+      "reuse_active_mapping": true,
+      "date_source": "effective trip date"
+    },
+    "leg_id": {
+      "target": "Leg ID",
+      "format": "<Client ID>_<Journey ID>_<A|B>",
+      "examples": [
+        "2336_2611080001_A",
+        "2336_2611080001_B"
+      ],
+      "shared_by_client_and_assistant_on_same_leg": true
+    },
+    "leg_group_key_date_source": "effective trip date"
+  },
+  "tobi_leg_columns_decision": {
+    "status": "pending external confirmation from TOBI development team",
+    "columns": [
+      "Leg_ID_A",
+      "Leg_ID_B"
+    ],
+    "current_action": "Do not add or populate these columns until TOBI confirms behavior and duplication risk.",
+    "current_export": "one row per retained passenger/Leg with Journey ID and Leg ID",
+    "candidate_future_modes": {
+      "row_per_leg": "Populate only the column corresponding to that row's Leg.",
+      "consolidated_journey": "One row with both Leg_ID_A and Leg_ID_B, allowing TOBI to create both Legs."
+    }
+  },
+  "exceptions": {
+    "EXACT_DUPLICATE_REMOVED": "info",
+    "ASSISTANT_WITHOUT_CLIENT": "error",
+    "MULTIPLE_CLIENTS_SAME_LEG": "error",
+    "MULTIPLE_ASSISTANTS_SAME_LEG": "error",
+    "MULTIPLE_RETURN_LEGS": "error",
+    "MORE_THAN_TWO_LEGS": "error",
+    "INVALID_LEG_SEQUENCE": "error",
+    "LEG_B_BEFORE_LEG_A": "error",
+    "NONRECIPROCAL_ROUTE": "warning",
+    "INVALID_JOURNEY_ID": "error",
+    "INVALID_LEG_ID": "error",
+    "JOURNEY_ASSIGNMENT_AMBIGUOUS": "error",
+    "MULTIPLE_TRIP_DATES": "error",
+    "UNKNOWN_PASSENGER_TYPE": "error"
+  },
+  "validation_patterns": {
+    "Journey ID": "^[0-9]{10}$",
+    "Leg ID": "^.+_[0-9]{10}_[AB]$",
+    "Primary Phone": "^[0-9]{10}$",
+    "Booking Fare minimum": 0
+  },
+  "acceptance_tests": [
+    {
+      "id": "AT-01",
+      "case": "Single CLI single Leg",
+      "expected": "Leg A and valid IDs"
+    },
+    {
+      "id": "AT-02",
+      "case": "CLI plus PCA same Leg",
+      "expected": "Both retained and share Journey/Leg IDs; PCA Tobi MRN ends _PCA"
+    },
+    {
+      "id": "AT-03",
+      "case": "Reciprocal two-Leg Journey",
+      "expected": "Earlier A, later B, one Journey ID"
+    },
+    {
+      "id": "AT-04",
+      "case": "Round trip with assistant",
+      "expected": "Assistant shares identifiers with CLI on each Leg"
+    },
+    {
+      "id": "AT-05",
+      "case": "Orphan assistant",
+      "expected_exception": "ASSISTANT_WITHOUT_CLIENT"
+    },
+    {
+      "id": "AT-06",
+      "case": "Exact duplicate",
+      "expected": "Remove later copy only"
+    },
+    {
+      "id": "AT-07",
+      "case": "Required field contains Empty",
+      "expected": "Route original row to Invalid Trips and assign no IDs"
+    },
+    {
+      "id": "AT-08",
+      "case": "No valid phone",
+      "expected": {
+        "Primary Phone": "9876543210"
+      }
+    },
+    {
+      "id": "AT-09",
+      "case": "Amount blank zero negative or invalid",
+      "expected": {
+        "Booking Fare": 0
+      }
+    },
+    {
+      "id": "AT-10",
+      "case": "Default mode",
+      "expected": {
+        "Mode": "Ambulette"
+      }
+    },
+    {
+      "id": "AT-11",
+      "case": "Default service area",
+      "expected": {
+        "Service Area": "NCTD Service Area"
+      }
+    },
+    {
+      "id": "AT-12",
+      "case": "ANGUIANO misspelling",
+      "input": "VISIUALLY IMPAIRED",
+      "expected": {
+        "Tobi Tags": "Visually Impaired"
+      }
+    },
+    {
+      "id": "AT-13",
+      "case": "Reprocessing within retention",
+      "expected": "Reuse Journey ID without consuming sequence"
+    },
+    {
+      "id": "AT-14",
+      "case": "Trip date changed from 2026-10-23 to 2026-11-12",
+      "expected": "Trip Date, Pickup Time and Dropoff Time use 2026-11-12; times unchanged"
+    },
+    {
+      "id": "AT-15",
+      "case": "Trip date changed",
+      "expected": "Journey ID starts with 261112 and every Leg ID embeds that Journey ID"
+    },
+    {
+      "id": "AT-16",
+      "case": "Trip date changed and a row has an invalid TripDate",
+      "expected": "That row keeps its original values in Invalid Trips and gets no IDs"
+    },
+    {
+      "id": "AT-17",
+      "case": "Source file with more than one TripDate",
+      "expected_exception": "MULTIPLE_TRIP_DATES; date change blocked"
+    }
+  ],
+  "nodejs_implementation": {
+    "recommended_modules": [
+      "ingestion",
+      "validation",
+      "normalization",
+      "deduplication",
+      "passenger-classification",
+      "leg-grouping",
+      "journey-matching",
+      "identifier-service",
+      "field-mapping",
+      "exception-service",
+      "csv-export",
+      "processing-summary"
+    ],
+    "recommended_types": [
+      "SourceManifestRow",
+      "NormalizedManifestRow",
+      "InvalidTripRow",
+      "LogicalLeg",
+      "Journey",
+      "DestinationRow",
+      "ParseException",
+      "ProcessingSummary"
+    ],
+    "concurrency": [
+      "transactional daily sequence allocation",
+      "unique Journey ID",
+      "unique active fingerprint",
+      "idempotent retries"
+    ],
+    "security": [
+      "minimize PII in logs",
+      "encrypt in transit and at rest",
+      "role-based authorization",
+      "configurable retention"
+    ]
+  }
+}

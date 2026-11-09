@@ -1,0 +1,184 @@
+/* =====================================================================
+   NCTD theme (on top of Pico.css v2)
+   Structure taken from csv-diff-app-v2; colors taken from the NCTD logo.
+   ===================================================================== */
+
+:root {
+  /* ---- Brand palette (NCTD logo) ---- */
+  --brand-blue:      #015CAB;
+  --brand-blue-600:  #014A8A;
+  --brand-teal:      #008C99;
+  --brand-teal-600:  #00737E;
+  --brand-navy:      #1F2D3D;
+  --brand-gray:      #5F6B76;
+  --brand-graphite:  #4E545A;
+  --brand-white:     #FFFFFF;
+  --brand-border:    #D8DDE3;
+
+  /* ---- Surfaces and text ---- */
+  --app-bg:          var(--brand-white);
+  --app-surface:     var(--brand-white);
+  --app-text:        var(--brand-navy);
+  --app-text-muted:  var(--brand-gray);
+  --app-table-text:  #222;
+  --app-row-alt:     #FAFBFC;
+  --app-row-hover:   #EEF4FB;
+  --app-th-bg:       var(--brand-navy);
+  --app-th-text:     var(--brand-white);
+  --app-ok:          #1E7B3C;
+  --app-error:       #B42318;
+
+  /* ---- Shape and scale ---- */
+  --app-radius-lg:   14px;
+  --app-radius-md:   12px;
+  --app-shadow:      0 6px 16px rgba(0, 0, 0, .04);
+  --app-font-scale:  0.97;
+  --grid-height:     360px;
+  --grid-height-tall: 520px;
+
+  /* ---- Pico variables ---- */
+  --pico-primary:              var(--brand-blue);
+  --pico-primary-background:   var(--brand-blue);
+  --pico-primary-border:       var(--brand-blue);
+  --pico-primary-hover:        var(--brand-blue-600);
+  --pico-primary-hover-background: var(--brand-blue-600);
+  --pico-muted-color:          var(--app-text-muted);
+}
+
+/* ===== Base ===== */
+html { font-size: calc(100% * var(--app-font-scale)); }
+html, body { background: var(--app-bg); color: var(--app-text); line-height: 1.45; }
+.container { padding: 1rem clamp(1rem, 3vw, 2rem) 2rem; max-width: 1440px; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ===== Logos: 3 columns (CFS | empty | NCTD) ===== */
+.logo-row {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center;
+  gap: 1rem; margin: 1.5rem 0 1.5rem;
+}
+.logo-row .logo { height: 110px; width: auto; max-width: 100%; object-fit: contain; }
+.logo-row .logo-left { justify-self: start; }
+.logo-row .logo-right { justify-self: end; }
+@media (min-width: 768px) { .logo-row { margin-top: 2.5rem; } .logo-row .logo { height: 130px; } }
+
+/* ===== Header ===== */
+.page-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 1px solid var(--brand-border);
+}
+.header-left h1, .header-left p { margin: 0; }
+.header-right { display: flex; align-items: center; gap: .75rem; }
+.lang-select { display: inline-flex; align-items: center; gap: .5rem; color: var(--app-text-muted); margin: 0; }
+.lang-select select { margin: 0; width: auto; }
+.page-title { font-size: 1.5rem; font-weight: 700; color: var(--brand-blue); }
+@media (min-width: 768px) { .page-title { font-size: 2rem; } }
+.subtitle { margin-top: .25rem !important; }
+
+/* ===== Text ===== */
+.hint { color: var(--app-text-muted); margin: .25rem 0 1rem; }
+.file-info, .count-text { color: var(--app-text-muted); font-size: .9rem; }
+.count-text { text-align: right; margin-top: .4rem; }
+.status { min-height: 1.2em; margin: .35rem 0; font-size: .92rem; color: var(--app-text-muted); }
+.status.ok { color: var(--app-ok); }
+.status.error { color: var(--app-error); font-weight: 600; }
+.sub-title { font-size: 1rem; margin: .75rem 0 .5rem; color: var(--brand-navy); }
+
+/* ===== Cards ===== */
+.card {
+  background: var(--app-surface); border: 1px solid var(--brand-border); border-radius: var(--app-radius-lg);
+  padding: 1rem; margin-bottom: 1.25rem; box-shadow: var(--app-shadow);
+}
+.card h2 { color: var(--brand-blue); font-size: 1.3rem; margin-bottom: .25rem; }
+.card.is-disabled { opacity: .55; }
+@media (min-width: 768px) { .card { padding: 1.25rem 1.5rem; } }
+
+.upload-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+@media (min-width: 1024px) { .upload-grid { grid-template-columns: 1fr 1fr; } }
+.upload-card {
+  margin: 0; padding: 1rem; border: 1px solid var(--brand-border); border-radius: var(--app-radius-md);
+  box-shadow: none; background: var(--app-surface); min-width: 0;
+}
+.upload-card h3 { margin: 0; font-size: 1.1rem; }
+.upload-card input[type=file] { margin-bottom: .25rem; }
+
+.result-head, article > header.result-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; flex-wrap: wrap; margin: 0 0 .5rem; padding: 0; background: none; border: 0; }
+
+/* ===== Date change sub-section ===== */
+.date-change {
+  margin: 1.25rem 0 0; padding: 1rem; border: 1px dashed var(--brand-border);
+  border-radius: var(--app-radius-md); background: var(--app-surface); box-shadow: none;
+}
+.date-toggle { font-weight: 600; margin-bottom: .5rem; }
+.date-change fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.date-change fieldset:disabled { opacity: .5; }
+.date-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; }
+.date-row .current-date { margin: 0 0 .9rem; }
+.date-row .current-date strong { color: var(--brand-blue); font-size: 1.1rem; margin-left: .35rem; }
+.date-row .date-input { margin: 0; flex: 0 1 220px; }
+.date-row .date-input input { margin-bottom: 0; }
+.date-row button { margin-bottom: 0; }
+
+/* ===== Buttons ===== */
+.btn-primary { background: var(--brand-blue); border-color: var(--brand-blue); color: var(--brand-white); }
+.btn-primary:hover:not(:disabled) { background: var(--brand-blue-600); border-color: var(--brand-blue-600); }
+.btn-accent { background: var(--brand-teal); border-color: var(--brand-teal); color: var(--brand-white); }
+.btn-accent:hover:not(:disabled) { background: var(--brand-teal-600); border-color: var(--brand-teal-600); }
+.process-row { margin-top: 1.25rem; display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
+.process-row button { margin: 0; min-width: 220px; }
+a.secondary[role=button] { border: 1px solid var(--brand-blue); color: var(--brand-blue); background: transparent; }
+a.secondary[role=button]:hover { background: rgba(1, 92, 171, .08); }
+.downloads { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1rem 0; }
+.downloads a { margin: 0; font-size: .95rem; }
+.downloads .fname { display: block; font-size: .78rem; opacity: .8; }
+
+.search-row { display: grid; grid-template-columns: 1fr auto auto; gap: .5rem; margin: 1rem 0 .75rem; align-items: start; }
+.search-row input, .search-row button { margin: 0; }
+
+/* ===== Summary ===== */
+.summary { margin: .75rem 0; }
+.summary dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .5rem; margin: 0 0 .75rem; }
+.summary dl div { border: 1px solid var(--brand-border); border-radius: 10px; padding: .5rem .75rem; }
+.summary dt { font-size: .8rem; color: var(--app-text-muted); font-weight: 400; }
+.summary dd { margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--brand-navy); }
+.summary dl div.wide { grid-column: span 2; }
+.summary dd small { font-size: .8rem; font-weight: 400; color: var(--app-text-muted); margin-left: .35rem; }
+.summary ul { margin: 0 0 .5rem 1.1rem; font-size: .92rem; }
+.sev-error { color: var(--app-error); }
+.sev-warning { color: #B54708; }
+
+/* ===== Datagrids (Tabulator) ===== */
+.grid-box { width: 100%; min-width: 0; height: var(--grid-height); border: 1px solid var(--brand-border); border-radius: var(--app-radius-md); overflow: hidden; }
+.grid-box.grid-tall { height: var(--grid-height-tall); }
+@media (max-width: 767px) {
+  :root { --grid-height: 60vh; --grid-height-tall: 60vh; }
+  .process-row button, .date-row button, .date-row .date-input { width: 100%; flex: 1 1 100%; }
+  .search-row { grid-template-columns: 1fr 1fr; }
+  .search-row input { grid-column: 1 / -1; }
+  .logo-row .logo { height: 64px; }
+}
+.tabulator { border: 0; font-size: .85rem; background: var(--app-surface); }
+.tabulator .tabulator-header { background: var(--app-th-bg); color: var(--app-th-text); border-bottom: 0; }
+.tabulator .tabulator-header .tabulator-col { background: var(--app-th-bg); color: var(--app-th-text); border-right-color: rgba(255, 255, 255, .15); }
+.tabulator .tabulator-header .tabulator-col .tabulator-col-content { padding: .5rem .6rem; }
+.tabulator .tabulator-tableholder .tabulator-table { color: var(--app-table-text); background: var(--app-surface); }
+.tabulator-row { background: var(--app-surface); }
+.tabulator-row.tabulator-row-even { background: var(--app-row-alt); }
+.tabulator-row.tabulator-selectable:hover, .tabulator-row:hover { background: var(--app-row-hover); }
+.tabulator-row .tabulator-cell { padding: .4rem .6rem; border-right-color: var(--brand-border); }
+.tabulator .tabulator-placeholder .tabulator-placeholder-contents { color: var(--app-text-muted); font-weight: 400; font-size: .95rem; }
+.tabulator .tabulator-frozen.tabulator-frozen-left { border-right: 2px solid var(--brand-border); }
+.tabulator-row .tabulator-cell.tabulator-frozen { background: inherit; }
+
+/* ===== Footer ===== */
+.brand-footer { margin-top: 1.5rem; padding-top: .75rem; text-align: center; color: var(--brand-graphite); border-top: 1px solid var(--brand-border); }
+
+/* ===== Dark mode (follows the system, like Pico) ===== */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --app-bg: #0f1316; --app-surface: #11161b; --app-text: #e7eaee; --app-text-muted: #9aa3ad;
+    --app-table-text: #e7eaee; --app-row-alt: #0f1419; --app-row-hover: #15202a;
+    --app-th-bg: #1f2a33; --app-th-text: #eef2f6; --brand-border: #1e2630; --brand-graphite: #b9c2cb;
+    --brand-navy: #e7eaee; --app-shadow: none; --brand-blue: #3D8BD6; --brand-blue-600: #2F76BC;
+  }
+  .logo-row .logo { background: #fff; padding: .5rem; border-radius: 10px; }
+}
