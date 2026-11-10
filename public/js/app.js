@@ -163,12 +163,24 @@
   }
 
   // ---------- date change ----------
+  // The preview of the changed date stays collapsed until "Cambiar la fecha" succeeds.
+  function hideChangedPreview() {
+    $('changedPreview').hidden = true;
+    clearGrid(grids.changed);
+  }
+
+  async function showChangedPreview(columns, rows) {
+    $('changedPreview').hidden = false;
+    await setGrid(grids.changed, columns, rows);
+    grids.changed.table.redraw(true); // it was built while hidden
+  }
+
   function onViajesChanged() {
     state.changedDate = null;
     $('dateToggle').checked = false;
     $('dateFields').disabled = true;
     $('newDate').value = '';
-    clearGrid(grids.changed);
+    hideChangedPreview();
     setMessage('dateStatus', null);
     const dates = state.viajes ? state.viajes.tripDates : [];
     $('currentDate').textContent = dates.length ? dates.map(fmtDate).join(', ') : '—';
@@ -189,7 +201,7 @@
     if (!on) {
       state.changedDate = null;
       $('newDate').value = '';
-      clearGrid(grids.changed);
+      hideChangedPreview();
       setMessage('dateStatus', null);
       resetResults();
     }
@@ -208,10 +220,12 @@
         body: JSON.stringify({ newDate }),
       });
       state.changedDate = body.newDate;
-      await setGrid(grids.changed, body.columns, body.rows);
+      await showChangedPreview(body.columns, body.rows);
       setMessage('dateStatus', 'date.applied', { date: fmtDate(body.newDate) }, 'ok');
       resetResults();
     } catch (err) {
+      state.changedDate = null;
+      hideChangedPreview();
       const m = errorMessage(err);
       setMessage('dateStatus', m.key, m.vars, 'error');
     }

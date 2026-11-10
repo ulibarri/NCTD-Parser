@@ -87,8 +87,11 @@
             <button type="button" id="applyDateBtn" class="btn-primary" disabled data-i18n="date.apply"><%= t('date.apply') %></button>
           </div>
           <p class="status" id="dateStatus" role="status"></p>
-          <h4 class="sub-title" data-i18n="date.preview"><%= t('date.preview') %></h4>
-          <div id="changedGrid" class="grid-box"></div>
+          <!-- Collapsed until "Cambiar la fecha" succeeds -->
+          <div id="changedPreview" hidden>
+            <h4 class="sub-title" data-i18n="date.preview"><%= t('date.preview') %></h4>
+            <div id="changedGrid" class="grid-box"></div>
+          </div>
         </fieldset>
       </article>
 

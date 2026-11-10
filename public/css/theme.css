@@ -161,7 +161,7 @@ a.secondary[role=button]:hover { background: rgba(1, 92, 171, .08); }
 .tabulator .tabulator-header .tabulator-col { background: var(--app-th-bg); color: var(--app-th-text); border-right-color: rgba(255, 255, 255, .15); }
 .tabulator .tabulator-header .tabulator-col .tabulator-col-content { padding: .5rem .6rem; }
 .tabulator .tabulator-tableholder .tabulator-table { color: var(--app-table-text); background: var(--app-surface); }
-.tabulator-row { background: var(--app-surface); }
+.tabulator-row { background: var(--app-surface); border-bottom-color: var(--brand-border); }
 .tabulator-row.tabulator-row-even { background: var(--app-row-alt); }
 .tabulator-row.tabulator-selectable:hover, .tabulator-row:hover { background: var(--app-row-hover); }
 .tabulator-row .tabulator-cell { padding: .4rem .6rem; border-right-color: var(--brand-border); }
