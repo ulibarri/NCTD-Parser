@@ -1,6 +1,6 @@
 'use strict';
 
-// Acceptance tests AT-01 to AT-17 from config/rules (v1.3.0).
+// Acceptance tests AT-01 to AT-20 from config/rules (v1.4.0).
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -213,4 +213,40 @@ test('Trip Purpose matches keywords inside location names; pickup first', async 
   assert.deepEqual(r.destinationRows.map((d) => d['Trip Purpose']), ['Glenner', 'Day Center', 'Appointment']);
   assert.equal(r.destinationRows[0]['Leg Notes'], 'PULN: ALZHEIMERS-GLENNER SAXONY | DOLN: DIALYSIS - X');
   assert.equal(r.destinationRows[2]['Leg Notes'], 'DOLN: TARGET');
+});
+
+// ---- output_file_naming (v1.4.0) ----
+const { outputName } = require('../src/parser/csv-export');
+const { rules } = require('./helpers');
+
+const naming = rules.file_contract.output_file_naming;
+const changed = { originalDate: parseTripDate('2026-10-23'), newDate: parseTripDate('2026-11-12') };
+
+test('AT-18 date changed: new date replaces the original one in Output and Invalid Trips names', () => {
+  assert.equal(outputName('NCTD_Trips_10.23.26_1.xlsx', 'destination', naming, changed), 'NCTD_Trips_11.12.26_1_TOBI.CSV');
+  assert.equal(outputName('NCTD_Trips_10.23.26_1.xlsx', 'invalid_trips', naming, changed), 'NCTD_Trips_11.12.26_1_INVALID_TRIPS.CSV');
+  // Pasajeros is not renamed
+  assert.equal(outputName('Pasajeros.csv', 'pasajeros_updated', naming, changed), 'Pasajeros_UPDATED.CSV');
+});
+
+test('AT-19 date changed and the name has no original date: new date is appended', () => {
+  assert.equal(outputName('Manifest.xlsx', 'destination', naming, changed), 'Manifest_11.12.26_TOBI.CSV');
+  // a different date in the name is not the trip date, so it stays
+  assert.equal(outputName('Trips_09.01.26.xlsx', 'destination', naming, changed), 'Trips_09.01.26_11.12.26_TOBI.CSV');
+});
+
+test('AT-20 date not changed: names keep the Source base name', () => {
+  assert.equal(outputName('NCTD_Trips_10.23.26_1.xlsx', 'destination', naming), 'NCTD_Trips_10.23.26_1_TOBI.CSV');
+});
+
+test('every example in output_file_naming is honored, in the same date format', () => {
+  for (const ex of naming.when_trip_date_changed.examples) {
+    const dates = { originalDate: parseTripDate(ex.original_trip_date), newDate: parseTripDate(ex.new_trip_date) };
+    assert.equal(outputName(ex.source, 'destination', naming, dates), ex.destination, ex.source);
+    assert.equal(outputName(ex.source, 'invalid_trips', naming, dates), ex.invalid_trips, ex.source);
+  }
+  const early = { originalDate: parseTripDate('2026-01-05'), newDate: parseTripDate('2026-11-12') };
+  assert.equal(outputName('Trips 1-5-2026.xlsx', 'destination', naming, early), 'Trips 11-12-2026_TOBI.CSV');
+  assert.equal(outputName('Trips_20260105.csv', 'destination', naming, early), 'Trips_20261112_TOBI.CSV');
+  assert.equal(outputName('Trips_010526.csv', 'destination', naming, early), 'Trips_111226_TOBI.CSV');
 });

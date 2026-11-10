@@ -1,7 +1,7 @@
 'use strict';
 
 // Processing pipeline for the Viajes file, following processing_pipeline in
-// config/rules/nctd_manifest_parser_rules_v1.3.0.json.
+// config/rules/nctd_manifest_parser_rules_v1.4.0.json.
 
 const crypto = require('node:crypto');
 const D = require('./dates');

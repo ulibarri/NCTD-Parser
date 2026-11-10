@@ -1,6 +1,6 @@
 # NCTD Manifest Parser
 
-WebApp en Node.js y Express que convierte el manifiesto de viajes de North County Transit District ("Viajes") en el CSV de importación de TOBI ("Output"). Aplica las reglas de `config/rules/nctd_manifest_parser_rules_v1.3.0.json`.
+WebApp en Node.js y Express que convierte el manifiesto de viajes de North County Transit District ("Viajes") en el CSV de importación de TOBI ("Output"). Aplica las reglas de `config/rules/nctd_manifest_parser_rules_v1.4.0.json`.
 
 ## Requisitos
 

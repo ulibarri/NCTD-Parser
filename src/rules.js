@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const RULES_FILE = process.env.RULES_FILE
-  || path.join(__dirname, '..', 'config', 'rules', 'nctd_manifest_parser_rules_v1.3.0.json');
+  || path.join(__dirname, '..', 'config', 'rules', 'nctd_manifest_parser_rules_v1.4.0.json');
 
 let cached = null;
 

@@ -128,12 +128,15 @@ function createApiRouter({ rules, registry, uploads, jobs }) {
       const defaultPhone = rules.field_rules.phones['Primary Phone'].default;
       const pas = updatePasajeros(pasajeros && pasajeros.table, result.destinationRows, defaultPhone);
 
+      // output_file_naming: a changed trip date is reflected in the Output and Invalid Trips names.
+      const naming = rules.file_contract.output_file_naming;
+      const dates = overrideDate ? { originalDate: D.parseTripDate(viajes.tripDates[0]), newDate: overrideDate } : {};
       const files = {
-        output: { filename: outputName(viajes.filename, '_TOBI'), csv: toCsv(result.destinationColumns, result.destinationRows) },
-        pasajeros: { filename: outputName(pasajeros ? pasajeros.filename : 'Pasajeros.csv', '_UPDATED'), csv: toCsv(pas.headers, pas.rows) },
+        output: { filename: outputName(viajes.filename, 'destination', naming, dates), csv: toCsv(result.destinationColumns, result.destinationRows) },
+        pasajeros: { filename: outputName(pasajeros ? pasajeros.filename : null, 'pasajeros_updated', naming), csv: toCsv(pas.headers, pas.rows) },
       };
       if (result.invalidRows.length) {
-        files.invalid = { filename: outputName(viajes.filename, '_INVALID_TRIPS'), csv: toCsv(result.invalidColumns, result.invalidRows) };
+        files.invalid = { filename: outputName(viajes.filename, 'invalid_trips', naming, dates), csv: toCsv(result.invalidColumns, result.invalidRows) };
       }
       const summary = { ...result.summary, pasajerosAdded: pas.added };
       const jobId = jobs.add({ files, destinationRows: result.destinationRows, columns: result.destinationColumns, summary });

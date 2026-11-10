@@ -66,7 +66,9 @@ test('ingestion rejects missing columns and unsupported formats', async () => {
 test('CSV export: BOM, header and quoting; output names', () => {
   const csv = toCsv(['A', 'B'], [{ A: '1,2', B: 'x' }]);
   assert.ok(csv.startsWith('﻿A,B\r\n"1,2",x'));
-  assert.equal(outputName('NCTD_Trips_10.23.26_1.xlsx', '_TOBI'), 'NCTD_Trips_10.23.26_1_TOBI.CSV');
+  const naming = rules.file_contract.output_file_naming;
+  assert.equal(outputName('NCTD_Trips_10.23.26_1.xlsx', 'destination', naming), 'NCTD_Trips_10.23.26_1_TOBI.CSV');
+  assert.equal(outputName('Pasajeros.csv', 'pasajeros_updated', naming), 'Pasajeros_UPDATED.CSV');
 });
 
 test('Pasajeros (provisional): appends clients not already listed', () => {

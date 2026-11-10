@@ -2,7 +2,7 @@
   "name": "nctd-manifest-parser",
   "version": "0.1.0",
   "private": true,
-  "description": "NCTD Manifest Parser WebApp: converts NCTD trip manifests (Viajes) into TOBI-compatible CSV files following config/rules/nctd_manifest_parser_rules_v1.3.0.json.",
+  "description": "NCTD Manifest Parser WebApp: converts NCTD trip manifests (Viajes) into TOBI-compatible CSV files following config/rules/nctd_manifest_parser_rules_v1.4.0.json.",
   "main": "server.js",
   "engines": {
     "node": ">=22"
