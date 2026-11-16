@@ -123,6 +123,13 @@ html, body { background: var(--app-bg); color: var(--app-text); line-height: 1.4
 .btn-primary:hover:not(:disabled) { background: var(--brand-blue-600); border-color: var(--brand-blue-600); }
 .btn-accent { background: var(--brand-teal); border-color: var(--brand-teal); color: var(--brand-white); }
 .btn-accent:hover:not(:disabled) { background: var(--brand-teal-600); border-color: var(--brand-teal-600); }
+.v2-toggle { display: inline-flex; align-items: center; gap: .5rem; margin-top: 1.25rem; font-weight: 600; }
+.v2-seq { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.25rem; }
+.v2-seq-start { display: inline-flex; align-items: center; gap: .5rem; margin: 1.25rem 0 0; }
+.v2-seq-start input { width: 8.5rem; margin: 0; }
+.v2-seq-preview { margin-top: 1.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9rem; opacity: .85; }
+.v2-hint { margin: .25rem 0 0; font-size: .85rem; opacity: .8; }
+.export-status .mode { display: block; font-weight: 400; font-size: .9rem; margin-top: .25rem; }
 .process-row { margin-top: 1.25rem; display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
 .process-row button { margin: 0; min-width: 220px; }
 a.secondary[role=button] { border: 1px solid var(--brand-blue); color: var(--brand-blue); background: transparent; }
@@ -144,6 +151,11 @@ a.secondary[role=button]:hover { background: rgba(1, 92, 171, .08); }
 .summary dd small { font-size: .8rem; font-weight: 400; color: var(--app-text-muted); margin-left: .35rem; }
 .summary ul { margin: 0 0 .5rem 1.1rem; font-size: .92rem; }
 .sev-error { color: var(--app-error); }
+.sev-blocking { color: var(--app-error); font-weight: 700; }
+.sev-info { color: var(--app-text-muted); }
+.export-status { margin: .5rem 0 0; padding: .6rem .9rem; border-radius: 10px; font-weight: 600; }
+.export-status.ok { color: var(--app-ok); background: rgba(30, 123, 60, .08); border: 1px solid rgba(30, 123, 60, .35); }
+.export-status.blocked { color: var(--app-error); background: rgba(180, 35, 24, .08); border: 1px solid rgba(180, 35, 24, .4); }
 .sev-warning { color: #B54708; }
 
 /* ===== Datagrids (Tabulator) ===== */

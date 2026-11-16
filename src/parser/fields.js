@@ -12,25 +12,98 @@ function isMissing(value, markers) {
   return markers.some((m) => m.toUpperCase() === v);
 }
 
-/** Client Name -> Last Name / First Name, with the " - PCA" suffix for assistants. */
-function splitClientName(clientName, passengerType, rule) {
-  let name = collapse(clientName);
-  const suffixRule = rule.assistant_name_suffix;
-  if (suffixRule && suffixRule.when_passenger_type_in.includes(upper(passengerType))) {
-    if (!name.toUpperCase().endsWith(suffixRule.suffix.toUpperCase())) name += suffixRule.suffix;
-  }
-  const i = name.indexOf(rule.split_at_first);
-  if (i === -1) return { last: name, first: '', middle: '' };
-  return { last: name.slice(0, i).trim(), first: name.slice(i + 1).trim(), middle: '' };
+/** Removes every character outside A-Z, a-z and 0-9 (normalization.id_component_cleanup). */
+const alnum = (s) => String(s ?? '').replace(/[^A-Za-z0-9]/g, '');
+
+const appendOnce = (value, suffix) => (value.toUpperCase().endsWith(suffix.toUpperCase()) ? value : value + suffix);
+
+/**
+ * SOURCE-SPECIAL-CHARS-001: removes the listed characters (for example ( ) [ ])
+ * and collapses spaces; the enclosed text is kept.
+ */
+function removeCharacters(value, chars) {
+  let out = String(value ?? '');
+  for (const ch of chars) out = out.split(ch).join(' ');
+  return collapse(out);
 }
 
-/** Client ID -> Tobi MRN (adds _PCA only for Passenger Ty = PCA). */
-function tobiMrn(clientId, passengerType, rule) {
-  const id = collapse(clientId);
-  const when = rule.pca_rule.when['Passenger Ty'];
-  const suffix = rule.pca_rule.append_suffix;
-  if (upper(passengerType) === when.toUpperCase() && !id.toUpperCase().endsWith(suffix.toUpperCase())) return id + suffix;
+/**
+ * Passenger identity (PASSENGER-IDENTITY-002, v2.7.0): trip role, technical
+ * suffix (CLI "", PCA "PCA", COM/COMP "COM") and pairing class
+ * (PAIRING-001-OVERRIDE-002). Falls back to the pre-v2.7.0 rules.
+ * Returns null for an unknown Passenger Ty.
+ */
+function passengerIdentity(passengerType, rules) {
+  const type = upper(passengerType);
+  const v27 = rules.passenger_identity_v2_7;
+  if (v27) {
+    const c = v27.classification[type];
+    if (!c) return null;
+    const classes = rules.pairing_override_v2_7 && rules.pairing_override_v2_7.canonical_pairing_classes;
+    return { role: c.trip_role, suffix: c.canonical_identity_suffix, pairClass: (classes && classes[type]) || type };
+  }
+  const t = rules.passenger_types[type];
+  if (!t) return null;
+  const companion = t.classification === 'companion';
+  return {
+    role: t.classification,
+    suffix: companion ? rules.companion_definition.canonical_suffix : '',
+    pairClass: companion ? 'COMPANION' : 'CLIENT',
+  };
+}
+
+/**
+ * Client Name -> Last Name / First Name (split at the first comma).
+ * Companions (PCA, COM, COMP), NAME-003 (v2.7.0/v2.7.1): legacy suffixes are
+ * removed once (COMPANION-LASTNAME-CLEANUP-001, COMPANION-FIRSTNAME-CLEANUP-002),
+ * then First Name gets "-PCA" or "-COM" exactly once; Last Name gets no suffix.
+ * baseFirst / baseLast are the names before the visible suffix (used by
+ * CLIENT-NAME-FORMAT-001).
+ */
+function splitClientName(clientName, passengerType, rule, identitySuffix = '') {
+  const name = collapse(clientName);
+  const i = name.indexOf(rule.split_at_first);
+  let last = i === -1 ? name : name.slice(0, i).trim();
+  let first = i === -1 ? '' : name.slice(i + 1).trim();
+  let baseFirst = first;
+  const c = rule.companion_suffixes;
+  if (c && c.when_passenger_type_in.includes(upper(passengerType))) {
+    last = cleanWith(last, rule.legacy_last_name_cleanup);
+    if (last && c['Last Name']) last = appendOnce(last, c['Last Name']);
+    baseFirst = cleanWith(first, rule.legacy_first_name_cleanup);
+    const template = c['First Name'] || '';
+    first = baseFirst && template.includes('{identity_suffix}') && identitySuffix
+      ? appendOnce(baseFirst, template.replace('{identity_suffix}', identitySuffix))
+      : baseFirst;
+  }
+  return { last, first, baseFirst, middle: rule.targets['Middle Name'] };
+}
+
+/** Removes one trailing match of a cleanup rule's regex (case-insensitive). */
+function cleanWith(value, cleanup) {
+  if (!cleanup || !value) return value;
+  return value.replace(new RegExp(cleanup.regex, 'i'), cleanup.replacement || '').trim();
+}
+
+/** Kept for callers of v2.3.0-v2.6.0: removes a legacy trailing companion suffix from First Name. */
+function cleanLegacyFirstName(first, rule) {
+  return cleanWith(first, rule.legacy_first_name_cleanup);
+}
+
+/**
+ * Alphanumeric Client ID used in Tobi MRN, Vendor ID and Leg ID.
+ * For companions a trailing suffix of the same identity (PCA, or COM for
+ * COM/COMP; also legacy _PCA / -PCA) is removed first, so it is never duplicated.
+ */
+function alnumClientId(clientId, isCompanion, suffix = 'PCA') {
+  let id = alnum(clientId);
+  if (isCompanion && id.toUpperCase().endsWith(suffix) && id.length > suffix.length) id = id.slice(0, -suffix.length);
   return id;
+}
+
+/** Tobi MRN: {AlnumClientID} for clients, {AlnumClientID}PCA or {AlnumClientID}COM for companions. */
+function tobiMrn(baseId, isCompanion, suffix = 'PCA') {
+  return isCompanion ? baseId + suffix : baseId;
 }
 
 const STREET_SUFFIXES = ['ST', 'STREET', 'AVE', 'AVENUE', 'RD', 'ROAD', 'DR', 'DRIVE', 'BLVD', 'LN', 'LANE', 'CT', 'COURT',
@@ -101,8 +174,9 @@ function joinUnique(values, delimiter) {
   return out.join(delimiter);
 }
 
-function tobiTags(comments, rule) {
-  const text = upper(comments);
+/** Tobi Tags from Comments, Assisted and the location names (TAG-CBLA-001, TAG-VI-001). */
+function tobiTags(values, rule) {
+  const text = rule.source_columns.map((c) => upper(values[c])).join(' | ');
   const tags = rule.rules
     .filter((r) => r.phrases.some((p) => new RegExp(`(^|[^A-Z])${escapeRe(p.toUpperCase())}([^A-Z]|$)`).test(text)))
     .map((r) => r.value);
@@ -145,8 +219,15 @@ function spaceType(value, rule) {
 }
 
 module.exports = {
+  passengerIdentity,
+  cleanWith,
+  removeCharacters,
+  cleanLegacyFirstName,
+  appendOnce,
   collapse,
   upper,
+  alnum,
+  alnumClientId,
   isMissing,
   splitClientName,
   tobiMrn,

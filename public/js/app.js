@@ -5,7 +5,7 @@
   const $ = (id) => document.getElementById(id);
   const I18N = JSON.parse($('i18nData').textContent);
   const OUTPUT_COLUMNS = JSON.parse($('outputColumns').textContent);
-  const FROZEN = ['Journey ID', 'Leg ID'];
+  const FROZEN = ['Vendor ID', 'Leg ID'];
   const SEARCH_FIELDS = ['First Name', 'Last Name', 'Tobi MRN'];
 
   const state = {
@@ -35,7 +35,7 @@
     Object.keys(state.messages).forEach(renderMessage);
     renderFileInfo('viajes');
     renderFileInfo('pasajeros');
-    if (state.job) { renderSummary(); updateCount(); }
+    if (state.job) { renderSummary(); renderExportStatus(); updateCount(); }
   }
 
   function setMessage(id, key, vars, kind) {
@@ -238,10 +238,24 @@
   }
 
   function setBusy(busy) {
-    ['viajesFile', 'pasajerosFile', 'processBtn'].forEach((id) => { $(id).disabled = busy; });
+    ['viajesFile', 'pasajerosFile', 'processBtn', 'legIdV2Toggle', 'legIdV2SeqToggle'].forEach((id) => { $(id).disabled = busy; });
     if (!busy) updateProcessButton();
+    $('legIdV2Start').disabled = busy || !$('legIdV2SeqToggle').checked;
     $('section1').setAttribute('aria-busy', busy ? 'true' : 'false');
   }
+
+  // ---------- Leg ID V2 consecutive numbers (LEG-ID-V2-SEQUENTIAL-001) ----------
+  const seqLabel = (n) => 'L' + String(n).padStart(6, '0');
+  function updateSequencePreview() {
+    const on = $('legIdV2SeqToggle').checked;
+    const input = $('legIdV2Start');
+    input.disabled = !on;
+    const ok = /^[0-9]+$/.test(input.value.trim()) && Number(input.value) >= 1 && Number(input.value) <= 999999;
+    input.setAttribute('aria-invalid', on && !ok ? 'true' : 'false');
+    $('legIdV2Preview').textContent = on ? (ok ? t('v2seq.preview', { first: seqLabel(Number(input.value)) }) : t('v2seq.invalid')) : '';
+  }
+  $('legIdV2SeqToggle').addEventListener('change', updateSequencePreview);
+  $('legIdV2Start').addEventListener('input', updateSequencePreview);
 
   $('processBtn').addEventListener('click', async () => {
     setBusy(true);
@@ -250,6 +264,11 @@
       const payload = { viajesUploadId: state.viajes.uploadId };
       if (state.pasajeros) payload.pasajerosUploadId = state.pasajeros.uploadId;
       if ($('dateToggle').checked && state.changedDate) payload.newTripDate = state.changedDate;
+      if ($('legIdV2Toggle').checked) payload.legIdV2Mode = true;
+      if ($('legIdV2SeqToggle').checked) {
+        payload.legIdV2Sequential = true;
+        payload.legIdV2Start = $('legIdV2Start').value;
+      }
       const body = await api('/api/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       state.job = body;
       setMessage('processStatus', 's1.processed', {}, 'ok');
@@ -268,6 +287,7 @@
     $('section2').setAttribute('aria-disabled', 'true');
     $('section2Hint').hidden = false;
     $('summary').hidden = true;
+    $('exportStatus').hidden = true;
     $('downloads').hidden = true;
     ['searchInput', 'searchBtn', 'clearBtn'].forEach((id) => { $(id).disabled = true; });
     $('searchInput').value = '';
@@ -293,6 +313,7 @@
     $('section2').setAttribute('aria-disabled', 'false');
     $('section2Hint').hidden = true;
     renderSummary();
+    renderExportStatus();
     setDownload('dlOutput', job.downloads.output);
     setDownload('dlPasajeros', job.downloads.pasajeros);
     setDownload('dlInvalid', job.downloads.invalid);
@@ -304,6 +325,26 @@
     grids.output.table.redraw(true); // it was built while hidden
     updateCount();
     $('section2').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderExportStatus() {
+    const el = $('exportStatus');
+    if (!state.job) { el.hidden = true; return; }
+    const ready = state.job.summary.exportReady;
+    el.hidden = false;
+    el.className = 'export-status ' + (ready ? 'ok' : 'blocked');
+    el.textContent = ready ? t('s2.exportReady') : t('s2.exportBlocked', { count: state.job.summary.blockingErrors });
+    const mode = document.createElement('span');
+    mode.className = 'mode';
+    mode.textContent = state.job.summary.legIdV2Mode ? t('v2.modeOn', { name: state.job.summary.legIdV2ModeName }) : t('v2.modeOff');
+    el.append(mode);
+    const seq = state.job.summary.legIdV2Sequence;
+    if (seq && seq.first) {
+      const info = document.createElement('span');
+      info.className = 'mode';
+      info.textContent = t('v2seq.done', { first: seq.first, last: seq.last, next: seq.nextStart });
+      el.append(info);
+    }
   }
 
   function renderSummary() {
@@ -320,11 +361,12 @@
       ['summary.validRows', s.validRows],
       ['summary.invalidRows', s.invalidRows],
       ['summary.duplicatesRemoved', s.duplicatesRemoved],
-      ['summary.exceptionRows', s.exceptionRows],
-      ['summary.journeys', s.journeys],
-      ['summary.journeysReused', s.journeysReused],
       ['summary.outputRows', s.outputRows],
+      ['summary.pairs', s.pairs],
+      ['summary.unpairedLegs', s.unpairedLegs],
+      ['summary.catalogMatched', s.catalogProvided ? s.catalogMatched : '—'],
       ['summary.pasajerosAdded', s.pasajerosAdded],
+      ['summary.catalogMigrated', s.catalogProvided ? s.catalogMigrated : '—'],
     ];
     for (const [key, value, note] of items) {
       const div = document.createElement('div');
@@ -346,11 +388,18 @@
     const notes = [];
     for (const e of state.job.exceptions || []) {
       const count = e.count || e.rows.length;
-      const rows = e.rows.length ? ` (${e.rows.slice(0, 12).join(', ')}${e.rows.length > 12 ? '…' : ''})` : '';
-      notes.push({ cls: 'sev-' + e.severity, text: `${t('exc.' + e.code)} [${e.code}, ${t('sev.' + e.severity)}]: ${count}${rows}` });
-    }
-    if (s.unknownSpaceTypes && s.unknownSpaceTypes.length) {
-      notes.push({ cls: 'sev-warning', text: t('summary.unknownSpaceTypes', { values: s.unknownSpaceTypes.join(', ') }) });
+      if (e.code === 'UNKNOWN_SPACE_TYPE') {
+        notes.push({ cls: 'sev-info', text: t('summary.unknownSpaceTypes', { values: (e.values || []).join(', ') }) });
+        continue;
+      }
+      const rows = e.rows.length ? ` · ${t('summary.sourceRows')} ${e.rows.slice(0, 12).join(', ')}${e.rows.length > 12 ? '…' : ''}` : '';
+      const ids = e.ids && e.ids.length ? ` · ${e.ids.slice(0, 4).join(', ')}${e.ids.length > 4 ? '…' : ''}` : '';
+      const catalogRows = e.catalogRows && e.catalogRows.length ? ` · ${t('summary.catalogRows')} ${e.catalogRows.slice(0, 12).join(', ')}` : '';
+      if (e.code === 'NO_PASSENGER_CATALOG') {
+        notes.push({ cls: 'sev-warning', text: `${t('exc.' + e.code)} [${e.code}, ${t('sev.' + e.severity)}]` });
+        continue;
+      }
+      notes.push({ cls: 'sev-' + e.severity, text: `${t('exc.' + e.code)} [${e.code}, ${t('sev.' + e.severity)}]: ${count}${rows}${ids}${catalogRows}` });
     }
     if (notes.length) {
       const p = document.createElement('p');
@@ -401,6 +450,8 @@
     url.searchParams.delete('lang');
     window.history.replaceState(null, '', url);
     applyI18n();
+    updateSequencePreview();
+    if (state.job) renderExportStatus();
   });
 
   // ---------- wiring ----------

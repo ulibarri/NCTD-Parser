@@ -95,6 +95,27 @@
         </fieldset>
       </article>
 
+      <!-- v2.6.0: modo experimental TOBI_INDEPENDENT_LEGS_V2 (solo TOBI Stage) -->
+      <label class="v2-toggle">
+        <input type="checkbox" role="switch" id="legIdV2Toggle" />
+        <span data-i18n="v2.toggle"><%= t('v2.toggle') %></span>
+      </label>
+      <p class="v2-hint" data-i18n="v2.hint"><%= t('v2.hint') %></p>
+
+      <!-- v2.8.0: LEG-ID-V2-SEQUENTIAL-001 -->
+      <div class="v2-seq">
+        <label class="v2-toggle">
+          <input type="checkbox" role="switch" id="legIdV2SeqToggle" />
+          <span data-i18n="v2seq.toggle"><%= t('v2seq.toggle') %></span>
+        </label>
+        <label class="v2-seq-start" for="legIdV2Start">
+          <span data-i18n="v2seq.start"><%= t('v2seq.start') %></span>
+          <input type="number" id="legIdV2Start" min="1" max="999999" step="1" value="1" inputmode="numeric" disabled />
+        </label>
+        <span class="v2-seq-preview" id="legIdV2Preview" aria-live="polite"></span>
+      </div>
+      <p class="v2-hint" data-i18n="v2seq.hint"><%= t('v2seq.hint') %></p>
+
       <div class="process-row">
         <button type="button" id="processBtn" class="btn-primary" disabled data-i18n="s1.process"><%= t('s1.process') %></button>
         <p class="status" id="processStatus" role="status"></p>
@@ -107,6 +128,7 @@
       <p class="hint" id="section2Hint" data-i18n="s2.hint"><%= t('s2.hint') %></p>
 
       <div id="summary" class="summary" hidden></div>
+      <p id="exportStatus" class="export-status" role="status" hidden></p>
 
       <div class="downloads" id="downloads" hidden>
         <a id="dlOutput" class="secondary" role="button" href="#" download>⬇ <span data-i18n="s2.download.output"><%= t('s2.download.output') %></span> <small class="fname"></small></a>

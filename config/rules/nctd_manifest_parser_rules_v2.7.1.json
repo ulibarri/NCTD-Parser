@@ -1,0 +1,284 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "specification": {
+    "id": "nctd-manifest-parser",
+    "name": "NCTD Manifest Parser",
+    "organization": "North County Transit District",
+    "version": "2.7.1",
+    "status": "candidate_for_local_and_tobi_stage_validation",
+    "target_runtime": "Node.js",
+    "updated": "2026-11-13",
+    "extends": {
+      "file": "nctd_manifest_parser_rules_v2.7.0.json",
+      "version": "2.7.0",
+      "merge_strategy": "deep_merge_by_key",
+      "rule": "All v2.7.0 rules remain active. This version only resolves the conflicts between v2.7.0 and the v2.3.0-v2.5.0 companion rules that v2.7.0 left active, and records the decisions of 2026-11-13."
+    },
+    "description": "v2.7.1 overlay: applies the v2.7.0 companion identity and visible-name rules (NAME-003, PASSENGER-IDENTITY-002) to the field rules, passenger catalog, validations and test expectations that still described the v2.3.0 convention.",
+    "changelog": [
+      {
+        "version": "2.7.1",
+        "date": "2026-11-13",
+        "changes": [
+          "field_rules.client_name follows NAME-003: companion First Name ends with -PCA (PCA) or -COM (COM/COMP) exactly once; Last Name gets no suffix. Replaces the v2.3.0 COMPANION Last Name suffix still active in v2.7.0.",
+          "COMPANION-FIRSTNAME-CLEANUP-002: a trailing legacy - PCA or - COM in the manifest First Name is removed once before the v2.7.0 suffix is added.",
+          "COMPANION-LASTNAME-CLEANUP-001: a trailing COMPANION, PCA or COM in the manifest Last Name of a companion is removed once (decision 2026-11-13).",
+          "CATALOG-NAME-MIGRATION-003 replaces CATALOG-PCA-FIRSTNAME-MIGRATION-001 (v2.3.0), which would remove -PCA and add COMPANION again on every catalog upload.",
+          "Catalogs built before v2.7.0 are discarded; the catalog is regenerated from the original 2026-10-23 manifest (decision 2026-11-13).",
+          "VAL-005, VAL-009, consistency_contract and the expectations of AT-02, AT-25, AT-31 to AT-33 and TC-003, TC-005, TC-006, TC-015 updated to v2.7.0.",
+          "Added acceptance test AT-53."
+        ]
+      }
+    ]
+  },
+  "companion_definition": {
+    "superseded_by": "passenger_identity_v2_7 (PCA -> PCA, COM and COMP -> COM)"
+  },
+  "normalization": {
+    "identity_component_policy": "The same AlnumClientID normalization is used by Vendor ID, Leg ID, Tobi MRN, pairing groups and passenger-catalog key comparisons. For companion rows, remove one trailing legacy suffix of the same identity (PCA for PCA; COM for COM and COMP) before adding the canonical suffix of passenger_identity_v2_7."
+  },
+  "identifiers": {
+    "components": {
+      "AlnumClientID": "Client ID with every character outside A-Z, a-z, 0-9 removed. For companion rows, remove one trailing suffix of the same identity (PCA, or COM for COM/COMP) before composing the canonical suffix (technical_identity_v2_7)."
+    }
+  },
+  "field_rules": {
+    "client_name": {
+      "no_comma": "route the row to invalid_trips (CLIENT-NAME-FORMAT-001)",
+      "companion_suffixes": {
+        "rule_ids": [
+          "NAME-003"
+        ],
+        "when_passenger_type_in": [
+          "PCA",
+          "COM",
+          "COMP"
+        ],
+        "First Name": "-{identity_suffix}",
+        "Last Name": "",
+        "identity_suffix_source": "passenger_identity_v2_7.classification.<Passenger Ty>.canonical_identity_suffix (PCA -> PCA, COM/COMP -> COM)",
+        "apply_after_split": true,
+        "exactly_once": true
+      },
+      "examples": [
+        {
+          "Client Name": "LOPEZ,MARIA",
+          "Passenger Ty": "PCA",
+          "Last Name": "LOPEZ",
+          "First Name": "MARIA-PCA"
+        },
+        {
+          "Client Name": "LOPEZ,MARIA",
+          "Passenger Ty": "COMP",
+          "Last Name": "LOPEZ",
+          "First Name": "MARIA-COM"
+        },
+        {
+          "Client Name": "ALLOUCHE COMPANION,DEANNE - PCA",
+          "Passenger Ty": "PCA",
+          "Last Name": "ALLOUCHE",
+          "First Name": "DEANNE-PCA"
+        }
+      ],
+      "catalog_override": "For existing passengers, use catalog values after CATALOG-NAME-MIGRATION-003.",
+      "legacy_first_name_cleanup": {
+        "rule_id": "COMPANION-FIRSTNAME-CLEANUP-002",
+        "when": "Passenger Ty is PCA, COM or COMP",
+        "action": "Remove one trailing visible suffix (optional spaces + hyphen + optional spaces + PCA or COM), case-insensitive, before the NAME-003 suffix is added.",
+        "regex": "\\s*-\\s*(PCA|COM)\\s*$",
+        "replacement": "",
+        "do_not_remove": "PCA or COM text that is not the trailing suffix"
+      },
+      "legacy_last_name_cleanup": {
+        "rule_id": "COMPANION-LASTNAME-CLEANUP-001",
+        "when": "Passenger Ty is PCA, COM or COMP",
+        "action": "Remove one trailing legacy Last Name suffix (COMPANION, PCA or COM), case-insensitive; these names are deprecated by NAME-003.",
+        "regex": "\\s+(COMPANION|PCA|COM)\\s*$",
+        "replacement": "",
+        "decided_by": "Majo, 2026-11-13"
+      },
+      "invalid_format": {
+        "invalid_when": [
+          "Client Name has no comma",
+          "Last Name (text before the first comma) is empty; for companions, after COMPANION-LASTNAME-CLEANUP-001",
+          "First Name (text after the first comma) is empty; for companions, after COMPANION-FIRSTNAME-CLEANUP-002 and before the NAME-003 suffix is added"
+        ]
+      }
+    }
+  },
+  "passenger_catalog": {
+    "purpose": "Avoid aliases in TOBI while enforcing the v2.7.0 naming convention: companion First Name ends with -PCA or -COM, Last Name has no suffix.",
+    "key": {
+      "canonicalization": "Remove non-alphanumeric characters and compare case-insensitively. PCA and COM are different identities: 82475PCA and 82475COM are different passengers."
+    },
+    "existing_passenger": "Output takes First Name, Last Name and Primary Phone from the catalog after CATALOG-NAME-MIGRATION-003.",
+    "new_passenger": {
+      "action": "Build values with field_rules and append one catalog row: First Name ends with -PCA or -COM for companions, Last Name has no suffix, MRN Number equals Tobi MRN, Telephone equals Primary Phone."
+    },
+    "same_file": "If a new passenger appears in several rows of the same Viajes file, the first normalized source row defines the catalog values.",
+    "companions": "PCA and COM/COMP have separate catalog rows keyed by Tobi MRN (82475PCA: DEANNE-PCA / ALLOUCHE; 82475COM: DEANNE-COM / ALLOUCHE).",
+    "output_file": "NCTD_Passengers_<YYYYMMDD>_UPDTD.csv: uploaded rows in original order after CATALOG-NAME-MIGRATION-003, followed by new passengers in source row order.",
+    "migration_rules": [
+      {
+        "rule_id": "CATALOG-NAME-MIGRATION-003",
+        "replaces": "CATALOG-PCA-FIRSTNAME-MIGRATION-001",
+        "reason": "The v2.3.0 migration removes a trailing -PCA and appends COMPANION, which would undo NAME-003 every time the previous day's catalog is uploaded.",
+        "scope": "Catalog rows whose canonical MRN Number ends with PCA or COM",
+        "identity_suffixes": [
+          "PCA",
+          "COM"
+        ],
+        "First Name": {
+          "remove_regex": "\\s*-\\s*(PCA|COM)\\s*$",
+          "then_append": "-{identity_suffix}"
+        },
+        "Last Name": {
+          "remove_regex": "\\s+(COMPANION|PCA|COM)\\s*$"
+        },
+        "case_sensitive": false,
+        "mrn_action": "Preserve MRN Number.",
+        "client_rows": "Rows whose MRN does not end with PCA or COM are not changed.",
+        "idempotent": true,
+        "assumption": "NCTD Client ID values are numeric (confirmed 2026-11-11), so a MRN ending in PCA or COM always belongs to a companion."
+      }
+    ],
+    "catalog_reset": {
+      "decision": "Catalogs built with rules before v2.7.0 are discarded. The catalog is regenerated from the original 2026-10-23 manifest (NCTD_Trips_10.23.26_Source.xlsx) with these rules.",
+      "decided_by": "Majo, 2026-11-13"
+    }
+  },
+  "deprecated": [
+    "Sequential 10-digit Trip ID for TOBI export",
+    "Journey ID for TOBI export",
+    "Leg_ID_A column",
+    "Leg_ID_B column",
+    "_A and _B suffixes",
+    "-A and -B suffixes",
+    "_PCA and -PCA in ID fields",
+    "Leg ID format without pickup time",
+    "Leg_ID_A/Leg_ID_B rules of document v1.3 (2026-11-10)",
+    "Journey ID registry and 72-hour fingerprints",
+    "ASSISTANT_WITHOUT_CLIENT, MULTIPLE_CLIENTS_SAME_LEG, MULTIPLE_ASSISTANTS_SAME_LEG, MULTIPLE_RETURN_LEGS, MORE_THAN_TWO_LEGS, INVALID_LEG_SEQUENCE, LEG_B_BEFORE_LEG_A, JOURNEY_ASSIGNMENT_AMBIGUOUS, INVALID_JOURNEY_ID",
+    "Visible First Name suffix \" - PCA\" for companions",
+    "COMPANION, PCA or COM suffix in companion Last Name (v2.7.0)",
+    "PCA identity suffix for COM and COMP (v2.7.0)",
+    "CATALOG-PCA-FIRSTNAME-MIGRATION-001 (v2.3.0)",
+    "Catalogs built with rules before v2.7.0"
+  ],
+  "consistency_contract": {
+    "companion_visible_name_policy": {
+      "First Name": "Ends with -PCA (PCA) or -COM (COM, COMP) exactly once",
+      "Last Name": "No generated suffix"
+    },
+    "technical_pca_suffix_fields": [
+      "Tobi MRN",
+      "Vendor ID",
+      "Leg ID"
+    ],
+    "technical_companion_suffixes": {
+      "PCA": "PCA",
+      "COM": "COM",
+      "COMP": "COM"
+    },
+    "forbidden_active_first_name_suffixes": [
+      " - PCA",
+      "_PCA",
+      " - COM",
+      "_COM"
+    ],
+    "forbidden_active_last_name_suffixes": [
+      " COMPANION",
+      " PCA",
+      " COM"
+    ],
+    "acceptance_test_id_range": "AT-01..AT-53 with no gaps after applying v2.5.0, v2.6.0, v2.7.0 and v2.7.1"
+  },
+  "acceptance_test_suite": {
+    "rules_version": "2.7.1",
+    "embedded_acceptance_cases": "AT-01 to AT-53",
+    "deviations": {
+      "TC-003": "Expected First Name DEANNE-PCA and Last Name ALLOUCHE (v2.7.0 NAME-003).",
+      "TC-005": "COM keeps its own identity: Tobi MRN 82475COM, Vendor ID ...COM, Leg ID ...COMA (v2.7.0).",
+      "TC-006": "COMP canonicalizes to COM: Tobi MRN 82475COM, Vendor ID ...COM, Leg ID ...COMA (v2.7.0).",
+      "TC-015": "Legacy ALLOUCHE COMPANION,DEANNE - PCA becomes Last Name ALLOUCHE and First Name DEANNE-PCA (v2.7.1)."
+    },
+    "expected_overrides": {
+      "TC-003": {
+        "First Name": "DEANNE-PCA",
+        "Last Name": "ALLOUCHE"
+      },
+      "TC-005": {
+        "Tobi MRN": "82475COM",
+        "Vendor ID": "82475202610230755COM",
+        "Leg ID": "82475202610230755COMA"
+      },
+      "TC-006": {
+        "Tobi MRN": "82475COM",
+        "Vendor ID": "82475202610230755COM",
+        "Leg ID": "82475202610230755COMA"
+      },
+      "TC-015": {
+        "First Name": "DEANNE-PCA",
+        "Last Name": "ALLOUCHE"
+      }
+    }
+  },
+  "validations_patch": [
+    {
+      "validation_id": "VAL-005",
+      "assertion": "PCA IDs end in PCA, PCAA or PCAB; COM and COMP IDs end in COM, COMA or COMB; never with _ or -.",
+      "severity": "ERROR"
+    },
+    {
+      "validation_id": "VAL-009",
+      "assertion": "Companion First Name ends with -PCA (PCA) or -COM (COM, COMP) exactly once; companion Last Name has no COMPANION, PCA or COM suffix.",
+      "severity": "ERROR"
+    }
+  ],
+  "acceptance_tests_patch": [
+    {
+      "id": "AT-02",
+      "case": "CLI plus PCA same Leg",
+      "expected": "Separate Vendor ID and Leg ID; companion Tobi MRN ends with PCA; First Name ends with -PCA; Last Name unchanged."
+    },
+    {
+      "id": "AT-25",
+      "case": "New companion passenger",
+      "expected": "Own catalog row: First Name DEANNE-PCA, Last Name ALLOUCHE, MRN Number 82475PCA."
+    },
+    {
+      "id": "AT-31",
+      "case": "New PCA, COM or COMP with Client Name ALLOUCHE,DEANNE",
+      "expected": {
+        "PCA": {
+          "First Name": "DEANNE-PCA",
+          "Last Name": "ALLOUCHE",
+          "Tobi MRN": "82475PCA"
+        },
+        "COM/COMP": {
+          "First Name": "DEANNE-COM",
+          "Last Name": "ALLOUCHE",
+          "Tobi MRN": "82475COM"
+        }
+      }
+    },
+    {
+      "id": "AT-32",
+      "case": "Catalog row in the old format (DEANNE - PCA or DEANNE / ALLOUCHE COMPANION, MRN 82475PCA)",
+      "expected": "CATALOG-NAME-MIGRATION-003: catalog and Output use First Name DEANNE-PCA and Last Name ALLOUCHE; MRN and phone unchanged."
+    },
+    {
+      "id": "AT-33",
+      "case": "Reprocess a catalog already in the v2.7.0 format",
+      "expected": "First Name and Last Name remain unchanged; no repeated -PCA or -COM."
+    },
+    {
+      "id": "AT-53",
+      "case": "Companion manifest name with legacy suffixes (ALLOUCHE COMPANION,DEANNE - PCA)",
+      "expected": {
+        "Last Name": "ALLOUCHE",
+        "First Name": "DEANNE-PCA"
+      }
+    }
+  ]
+}

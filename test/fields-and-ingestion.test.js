@@ -7,7 +7,6 @@ const F = require('../src/parser/fields');
 const D = require('../src/parser/dates');
 const { readTable } = require('../src/parser/ingestion');
 const { toCsv, outputName } = require('../src/parser/csv-export');
-const { updatePasajeros } = require('../src/parser/pasajeros');
 const { rules } = require('./helpers');
 
 const IND = rules.field_rules.pickup_address.secondary_indicators;
@@ -67,24 +66,7 @@ test('CSV export: BOM, header and quoting; output names', () => {
   const csv = toCsv(['A', 'B'], [{ A: '1,2', B: 'x' }]);
   assert.ok(csv.startsWith('﻿A,B\r\n"1,2",x'));
   const naming = rules.file_contract.output_file_naming;
-  assert.equal(outputName('NCTD_Trips_10.23.26_1.xlsx', 'destination', naming), 'NCTD_Trips_10.23.26_1_TOBI.CSV');
-  assert.equal(outputName('Pasajeros.csv', 'pasajeros_updated', naming), 'Pasajeros_UPDATED.CSV');
-});
-
-test('Pasajeros (provisional): appends clients not already listed', () => {
-  const pasajeros = {
-    headers: ['First Name', 'Last Name', 'MRN Number', 'Telephone'],
-    columns: ['First Name', 'Last Name', 'MRN Number', 'Telephone'],
-    rows: [{ values: { 'MRN Number': '1001' }, original: ['JANE', 'DOE', '1001', '7605550101'] }],
-  };
-  const out = [
-    { 'First Name': 'JANE', 'Last Name': 'DOE', 'Tobi MRN': '1001', 'Primary Phone': '9876543210' },
-    { 'First Name': 'JANE - PCA', 'Last Name': 'DOE', 'Tobi MRN': '1001_PCA', 'Primary Phone': '9876543210' },
-    { 'First Name': 'RICHARD', 'Last Name': 'ROE', 'Tobi MRN': '1002', 'Primary Phone': '7605550199' },
-  ];
-  const r = updatePasajeros(pasajeros, out, '9876543210');
-  assert.equal(r.added, 1);
-  assert.deepEqual(r.rows[1], { 'First Name': 'RICHARD', 'Last Name': 'ROE', 'MRN Number': '1002', Telephone: '7605550199' });
+  assert.equal(outputName('NCTD_Trips_10.23.26_1.xlsx', 'destination', naming), 'NCTD_Trips_10.23.26_1_TOBI.csv');
 });
 
 test('Pasajeros upload requires First Name, Last Name, MRN Number and Telephone', async () => {

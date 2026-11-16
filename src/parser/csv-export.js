@@ -45,14 +45,28 @@ function renameWithDate(base, originalDate, newDate, rule) {
   return `${base}_${formatDate(newDate, rule.fallback_format)}`;
 }
 
+/** Date (YYYYMMDD) of an instant in a given IANA time zone. */
+function dateInZone(now, timeZone) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now).map((p) => [p.type, p.value]));
+  return `${parts.year}${parts.month}${parts.day}`;
+}
+
 /**
  * Output file name for one of the files in output_file_naming.files.
  * @param {string} sourceFilename uploaded file name
  * @param {'destination'|'invalid_trips'|'pasajeros_updated'} kind
  * @param {object} naming rules.file_contract.output_file_naming
  * @param {{ originalDate?: {y,m,d}, newDate?: {y,m,d} }} [dates] set when the trip date was changed
+ * @param {Date} [now] processing time (used by the fixed Pasajeros name)
  */
-function outputName(sourceFilename, kind, naming, dates = {}) {
+function outputName(sourceFilename, kind, naming, dates = {}, now = new Date()) {
+  const file = naming.files[kind];
+  if (file.fixed_name) {
+    // NCTD_Passengers_<YYYYMMDD>_UPDTD.csv, processing date in the configured time zone
+    return `${file.prefix}${dateInZone(now, file.timezone)}${file.suffix}${naming.extension}`;
+  }
   const fallback = kind === 'pasajeros_updated' ? 'Pasajeros' : 'Viajes';
   const name = sourceFilename || fallback;
   let base = path.basename(name, path.extname(name)) || fallback;
@@ -60,7 +74,7 @@ function outputName(sourceFilename, kind, naming, dates = {}) {
   if (dates.newDate && dates.originalDate && changed.applies_to.includes(kind)) {
     base = renameWithDate(base, dates.originalDate, dates.newDate, changed);
   }
-  return `${base}${naming.files[kind].suffix}${naming.extension}`;
+  return `${base}${file.suffix}${naming.extension}`;
 }
 
-module.exports = { toCsv, outputName, renameWithDate, formatDate };
+module.exports = { toCsv, outputName, renameWithDate, formatDate, dateInZone };

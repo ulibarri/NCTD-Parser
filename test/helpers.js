@@ -2,11 +2,7 @@
 
 // Test helpers: synthetic Viajes rows (no real passenger data).
 
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
 const { loadRules } = require('../src/rules');
-const { JsonRegistry } = require('../src/registry/json-registry');
 const { processViajes } = require('../src/parser/pipeline');
 
 const rules = loadRules();
@@ -68,13 +64,17 @@ function table(rows) {
   };
 }
 
-function tempRegistry() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nctd-reg-'));
-  return new JsonRegistry(path.join(dir, 'registry.json'), { retentionHours: 72 });
+/** Passenger catalog table (Pasajeros CSV) from plain objects. */
+function catalog(rows, headers = ['First Name', 'Last Name', 'MRN Number', 'Telephone']) {
+  return {
+    headers,
+    columns: headers,
+    rows: rows.map((values, i) => ({ rowNumber: i + 2, values: { ...values }, original: headers.map((h) => values[h] ?? '') })),
+  };
 }
 
-async function run(rows, { overrideDate = null, registry = tempRegistry(), now } = {}) {
-  return processViajes({ table: table(rows), rules, overrideDate, registry, now });
+async function run(rows, { overrideDate = null, catalog: cat = null, legIdV2Mode = false, legIdV2Sequence = null } = {}) {
+  return processViajes({ table: table(rows), rules, overrideDate, catalog: cat, legIdV2Mode, legIdV2Sequence });
 }
 
-module.exports = { rules, row, returnOf, table, tempRegistry, run, BASE };
+module.exports = { rules, row, returnOf, table, catalog, run, BASE };

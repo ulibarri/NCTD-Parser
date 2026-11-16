@@ -1,111 +1,99 @@
 'use strict';
 
-// Acceptance tests AT-01 to AT-20 from config/rules (v1.4.0).
+// Acceptance tests (acceptance_tests in config/rules, v2.0.0).
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { row, returnOf, run, tempRegistry } = require('./helpers');
+const { row, returnOf, run, rules } = require('./helpers');
 const { parseTripDate } = require('../src/parser/dates');
 const { ProcessingError } = require('../src/parser/pipeline');
+const { outputName } = require('../src/parser/csv-export');
 
 const codes = (r) => r.exceptions.map((e) => e.code);
 
-test('AT-01 single CLI single Leg', async () => {
+test('AT-01 single CLI single Leg: alphanumeric Vendor ID and Leg ID A', async () => {
   const r = await run([row()]);
   assert.equal(r.destinationRows.length, 1);
   const d = r.destinationRows[0];
-  assert.equal(d['Journey ID'], '2610230001');
-  assert.equal(d['Leg ID'], '1001_2610230001_A');
+  assert.equal(d['Vendor ID'], '1001202610230755');
+  assert.equal(d['Leg ID'], '1001202610230755A');
+  assert.equal(d['Pair Status'], 'Unpaired');
   assert.equal(d['Last Name'], 'DOE');
   assert.equal(d['First Name'], 'JANE');
-  assert.equal(d['Middle Name'], '');
   assert.equal(d['Pickup Time'], '2026-10-23 07:55:00.000');
-  assert.equal(d['Dropoff Time'], '2026-10-23 09:30:00.000');
   assert.equal(d['Dropoff Address'], '200 MISSION AVE');
   assert.equal(d['Dropoff Suite'], 'STE 5');
   assert.equal(d['Trip Purpose'], 'Dialysis');
-  assert.equal(d['Pickup State'], 'CA');
+  assert.ok(!('Journey ID' in d));
+  assert.deepEqual(Object.keys(d), rules.destination_columns);
+  assert.equal(r.summary.exportReady, true);
 });
 
-test('AT-02 CLI plus PCA same Leg share IDs; PCA MRN ends _PCA', async () => {
+test('AT-02 CLI plus PCA same Leg: separate identifiers, companion names and MRN', async () => {
   const r = await run([row(), row({ 'Passenger Ty': 'PCA', Amount: '0' })]);
-  assert.equal(r.destinationRows.length, 2);
   const [cli, pca] = r.destinationRows;
-  assert.equal(cli['Leg ID'], pca['Leg ID']);
-  assert.equal(cli['Journey ID'], pca['Journey ID']);
-  assert.equal(pca['Tobi MRN'], '1001_PCA');
-  assert.equal(pca['First Name'], 'JANE - PCA');
-  assert.equal(cli['Tobi MRN'], '1001');
+  assert.equal(cli['Leg ID'], '1001202610230755A');
+  assert.equal(pca['Vendor ID'], '1001202610230755PCA');
+  assert.equal(pca['Leg ID'], '1001202610230755PCAA');
+  assert.equal(pca['Tobi MRN'], '1001PCA');
+  assert.equal(pca['First Name'], 'JANE-PCA'); // v2.7.0 NAME-003
+  assert.equal(pca['Last Name'], 'DOE');
 });
 
-test('COM and COMP get " - PCA" in the name but no _PCA in the MRN', async () => {
-  const r = await run([row(), row({ 'Passenger Ty': 'COMP' })]);
-  assert.equal(r.destinationRows[1]['First Name'], 'JANE - PCA');
-  assert.equal(r.destinationRows[1]['Tobi MRN'], '1001');
-});
-
-test('AT-03 reciprocal two-Leg Journey: earlier A, later B, one Journey ID', async () => {
+test('AT-03 reciprocal pair: earlier A, later B, Paired', async () => {
   const a = row();
   const r = await run([returnOf(a), a]);
-  const ids = r.destinationRows.map((d) => d['Leg ID']);
-  assert.deepEqual(ids, ['1001_2610230001_A', '1001_2610230001_B']);
-  assert.equal(r.destinationRows[0]['Pickup Time'], '2026-10-23 07:55:00.000');
-  assert.equal(r.summary.journeys, 1);
-});
-
-test('AT-04 round trip with assistant shares identifiers on each Leg', async () => {
-  const a = row();
-  const b = returnOf(a);
-  const r = await run([a, row({ ...a, 'Passenger Ty': 'PCA' }), b, row({ ...b, 'Passenger Ty': 'PCA' })]);
-  const legs = r.destinationRows.map((d) => [d['Tobi MRN'], d['Leg ID']]);
-  assert.deepEqual(legs, [
-    ['1001', '1001_2610230001_A'], ['1001_PCA', '1001_2610230001_A'],
-    ['1001', '1001_2610230001_B'], ['1001_PCA', '1001_2610230001_B'],
+  assert.deepEqual(r.destinationRows.map((d) => [d['Leg ID'], d['Pair Status']]), [
+    ['1001202610230755A', 'Paired'], ['1001202610231500B', 'Paired'],
   ]);
 });
 
-test('AT-05 orphan assistant -> ASSISTANT_WITHOUT_CLIENT', async () => {
-  const r = await run([row({ 'Passenger Ty': 'PCA' })]);
-  assert.ok(codes(r).includes('ASSISTANT_WITHOUT_CLIENT'));
-  assert.equal(r.destinationRows.length, 0);
-  assert.equal(r.invalidRows[0]['Validation Status'], 'EXCEPTION');
+test('AT-04 round trip with assistant: each paired separately', async () => {
+  const a = row();
+  const b = returnOf(a);
+  const r = await run([a, row({ ...a, 'Passenger Ty': 'PCA' }), b, row({ ...b, 'Passenger Ty': 'PCA' })]);
+  assert.deepEqual(r.destinationRows.map((d) => d['Leg ID']), [
+    '1001202610230755A', '1001202610230755PCAA', '1001202610231500B', '1001202610231500PCAB',
+  ]);
+});
+
+test('AT-05 two round trips on the same day are paired without ambiguity', async () => {
+  const a = row();
+  const r = await run([a, returnOf(a, { PUTime: '12:00' }), row({ PUTime: '15:00' }), returnOf(a, { PUTime: '18:00' })]);
+  assert.equal(r.summary.exportReady, true);
+  assert.deepEqual(r.destinationRows.map((d) => d['Leg ID']), [
+    '1001202610230755A', '1001202610231200B', '1001202610231500A', '1001202610231800B',
+  ]);
 });
 
 test('AT-06 exact duplicate: later copy removed only', async () => {
   const r = await run([row(), row()]);
   assert.equal(r.destinationRows.length, 1);
-  assert.equal(r.summary.duplicatesRemoved, 1);
   assert.deepEqual(r.exceptions.find((e) => e.code === 'EXACT_DUPLICATE_REMOVED').rows, [3]);
 });
 
-test('AT-07 required field contains Empty -> Invalid Trips, no IDs', async () => {
+test('AT-07 required field contains Empty -> Invalid Trips, export not blocked', async () => {
   const r = await run([row({ PUCity: 'Empty' }), row({ 'Client ID': '1002', PUTime: '08:00' })]);
   assert.equal(r.invalidRows.length, 1);
-  const inv = r.invalidRows[0];
-  assert.equal(inv.PUCity, 'Empty');
-  assert.equal(inv['Validation Status'], 'INVALID');
-  assert.equal(inv['Invalid Fields'], 'PUCity');
-  assert.equal(inv['Source Row Number'], '2');
-  // the invalid row consumed no sequence: the valid row gets 0001
-  assert.equal(r.destinationRows[0]['Journey ID'], '2610230001');
+  assert.equal(r.invalidRows[0].PUCity, 'Empty');
+  assert.equal(r.invalidRows[0]['Invalid Fields'], 'PUCity');
+  assert.equal(r.destinationRows.length, 1);
+  assert.equal(r.summary.exportReady, true);
 });
 
-test('AT-08 no valid phone -> Primary Phone 9876543210; phones read from Comments', async () => {
+test('AT-08 phones: from Comments, default 9876543210', async () => {
   let r = await run([row({ Comments: 'CALL ON ARRIVAL' })]);
   assert.equal(r.destinationRows[0]['Primary Phone'], '9876543210');
-  assert.equal(r.destinationRows[0]['Secondary Phone'], '');
-  r = await run([row({ Comments: 'C: 760-555-0101 H: (760) 555-0102 W: +1 760 555 0103' })]);
+  r = await run([row({ Comments: 'C: 760-555-0101 H: (760) 555-0102' })]);
   assert.equal(r.destinationRows[0]['Primary Phone'], '7605550101');
   assert.equal(r.destinationRows[0]['Secondary Phone'], '7605550102');
 });
 
-test('AT-09 Amount blank, zero, negative or invalid -> Booking Fare 0', async () => {
+test('AT-09 Booking Fare 0 for blank, zero, negative or invalid Amount', async () => {
   for (const Amount of ['', '0', '-3', 'abc']) {
     const r = await run([row({ Amount })]);
     assert.equal(r.destinationRows[0]['Booking Fare'], '0', `Amount=${Amount}`);
   }
-  const r = await run([row({ Amount: '$5.50' })]);
-  assert.equal(r.destinationRows[0]['Booking Fare'], '5.5');
 });
 
 test('AT-10 and AT-11 default Mode and Service Area', async () => {
@@ -114,139 +102,161 @@ test('AT-10 and AT-11 default Mode and Service Area', async () => {
   assert.equal(r.destinationRows[0]['Service Area'], 'NCTD Service Area');
 });
 
-test('AT-12 VISIUALLY IMPAIRED -> Tobi Tags "Visually Impaired"; tags deduplicated', async () => {
-  const r = await run([row({ Comments: 'VISIUALLY IMPAIRED, LEGALLY BLIND. DO NOT LEAVE ALONE' })]);
+test('AT-12 tags: CBLA and Visually Impaired, phrases from both versions, extra source columns', async () => {
+  let r = await run([row({ Comments: 'VISUAL IMPAIRMENT. DO NOT LEAVE ALONE' })]);
   assert.equal(r.destinationRows[0]['Tobi Tags'], 'CBLA, Visually Impaired');
+  r = await run([row({ Assisted: 'CBLA' })]);
+  assert.equal(r.destinationRows[0]['Tobi Tags'], 'CBLA');
 });
 
-test('AT-13 reprocessing within retention reuses Journey ID without consuming sequence', async () => {
-  const registry = tempRegistry();
-  const first = await run([row()], { registry });
-  const second = await run([row()], { registry });
-  assert.equal(second.destinationRows[0]['Journey ID'], first.destinationRows[0]['Journey ID']);
-  assert.equal(second.summary.journeysReused, 1);
-  const third = await run([row({ 'Client ID': '1002' })], { registry });
-  assert.equal(third.destinationRows[0]['Journey ID'], '2610230002');
-  // after 72 hours the mapping expires and a new ID is generated
-  const later = await run([row()], { registry, now: new Date(Date.now() + 73 * 3600 * 1000) });
-  assert.equal(later.destinationRows[0]['Journey ID'], '2610230003');
+test('AT-13 companion reciprocal pair: PCAA and PCAB, letters and digits only', async () => {
+  const a = row({ 'Passenger Ty': 'PCA' });
+  const r = await run([a, returnOf(a)]);
+  const ids = r.destinationRows.map((d) => d['Leg ID']);
+  assert.deepEqual(ids, ['1001202610230755PCAA', '1001202610231500PCAB']);
+  for (const d of r.destinationRows) {
+    assert.match(d['Vendor ID'] + d['Leg ID'], /^[A-Za-z0-9]+$/);
+    assert.equal(d['First Name'], 'JANE-PCA'); // NAME-003: visible -PCA only in First Name
+  }
 });
 
-test('AT-14 date changed: Trip Date, Pickup Time and Dropoff Time use the new date', async () => {
+test('AT-14 and AT-15 date changed: dates and identifiers use the new date', async () => {
   const r = await run([row()], { overrideDate: parseTripDate('2026-11-12') });
   const d = r.destinationRows[0];
   assert.equal(d['Trip Date'], '2026-11-12 00:00:00.000');
   assert.equal(d['Pickup Time'], '2026-11-12 07:55:00.000');
   assert.equal(d['Dropoff Time'], '2026-11-12 09:30:00.000');
+  assert.equal(d['Vendor ID'], '1001202611120755');
+  assert.equal(d['Leg ID'], '1001202611120755A');
 });
 
-test('AT-15 date changed: Journey ID starts with 261112 and Leg IDs embed it', async () => {
-  const a = row();
-  const r = await run([a, returnOf(a)], { overrideDate: parseTripDate('2026-11-12') });
-  assert.deepEqual(r.destinationRows.map((d) => d['Leg ID']), ['1001_2611120001_A', '1001_2611120001_B']);
-});
-
-test('AT-16 date changed and a row has an invalid TripDate: original values kept, no IDs', async () => {
+test('AT-16 date changed and an invalid TripDate: original values kept in Invalid Trips', async () => {
   const r = await run([row(), row({ 'Client ID': '1002', TripDate: '13/45/2026' })], { overrideDate: parseTripDate('2026-11-12') });
-  assert.equal(r.destinationRows.length, 1);
   assert.equal(r.invalidRows[0].TripDate, '13/45/2026');
-  assert.equal(r.invalidRows[0]['Invalid Fields'], 'TripDate');
+  assert.match(r.invalidRows[0]['Validation Errors'], /MISSING_ID_COMPONENT/);
 });
 
-test('AT-17 more than one TripDate blocks the date change (MULTIPLE_TRIP_DATES)', async () => {
+test('AT-17 more than one TripDate blocks the date change', async () => {
   await assert.rejects(
     run([row(), row({ 'Client ID': '1002', TripDate: '10/24/2026' })], { overrideDate: parseTripDate('2026-11-12') }),
     (err) => err instanceof ProcessingError && err.code === 'MULTIPLE_TRIP_DATES',
   );
 });
 
-test('Dropoff Time is empty when DOAppt is empty; row stays valid', async () => {
-  const r = await run([row({ DOAppt: '' })]);
-  assert.equal(r.destinationRows[0]['Dropoff Time'], '');
-});
-
-test('non-reciprocal second leg -> NONRECIPROCAL_ROUTE warning, two single-leg journeys', async () => {
-  const r = await run([row(), row({ PUTime: '15:00', PUAddress: '9 OTHER RD' })]);
-  assert.ok(codes(r).includes('NONRECIPROCAL_ROUTE'));
-  assert.deepEqual(r.destinationRows.map((d) => d['Leg ID']), ['1001_2610230001_A', '1001_2610230002_A']);
-});
-
-test('two possible return legs -> MULTIPLE_RETURN_LEGS', async () => {
-  const a = row();
-  const r = await run([a, returnOf(a), returnOf(a, { PUTime: '16:00' })]);
-  assert.ok(codes(r).includes('MULTIPLE_RETURN_LEGS'));
-  assert.equal(r.destinationRows.length, 0);
-});
-
-test('two clients on the same leg -> MULTIPLE_CLIENTS_SAME_LEG', async () => {
-  const r = await run([row(), row({ 'Client Name': 'ROE ,RICHARD' })]);
-  assert.ok(codes(r).includes('MULTIPLE_CLIENTS_SAME_LEG'));
-  assert.equal(r.invalidRows.length, 2);
-});
-
-test('unknown Passenger Ty -> UNKNOWN_PASSENGER_TYPE', async () => {
+test('unknown Passenger Ty -> Invalid Trips with UNKNOWN_PASSENGER_TYPE', async () => {
   const r = await run([row({ 'Passenger Ty': 'XYZ' })]);
   assert.ok(codes(r).includes('UNKNOWN_PASSENGER_TYPE'));
+  assert.equal(r.invalidRows[0]['Validation Status'], 'EXCEPTION');
+  assert.equal(r.summary.exportReady, true);
 });
 
-test('Space Type mapping, LR booking note and unknown code default', async () => {
-  const r = await run([
-    row({ 'Space Type': 'LR', Comments: 'GATE CODE #7444' }),
-    row({ 'Client ID': '2', 'Space Type': 'XW', PUTime: '08:00' }),
-    row({ 'Client ID': '3', 'Space Type': '1', PUTime: '08:05' }),
-  ]);
-  const [lr, xw, unknown] = r.destinationRows;
-  assert.equal(lr['Seating Need'], 'Ambulatory');
-  assert.equal(lr['Booking Notes'], 'GATE CODE #7444, Lift Required');
-  assert.equal(lr['Pickup Gate Code'], '7444');
-  assert.equal(xw['Service Type'], 'Bariatric Wheelchair');
-  assert.equal(unknown['Seating Need'], 'Ambulatory');
-  assert.deepEqual(r.summary.unknownSpaceTypes, ['1']);
+test('gate code kept in Pickup Gate Code without #', async () => {
+  const r = await run([row({ Comments: 'GATE CODE #7444', 'Space Type': 'LR' })]);
+  assert.equal(r.destinationRows[0]['Pickup Gate Code'], '7444');
+  assert.equal(r.destinationRows[0]['Booking Notes'], 'GATE CODE #7444, Lift Required');
 });
 
-test('Trip Purpose matches keywords inside location names; pickup first', async () => {
-  const r = await run([
-    row({ PickUpLocationName: 'ALZHEIMERS-GLENNER SAXONY', DropLocationName: 'DIALYSIS - X' }),
-    row({ 'Client ID': '2', PUTime: '08:00', PickUpLocationName: '', DropLocationName: 'LIFE OF LIBERTY - HORNE ST' }),
-    row({ 'Client ID': '3', PUTime: '08:05', PickUpLocationName: '', DropLocationName: 'TARGET' }),
-  ]);
-  assert.deepEqual(r.destinationRows.map((d) => d['Trip Purpose']), ['Glenner', 'Day Center', 'Appointment']);
-  assert.equal(r.destinationRows[0]['Leg Notes'], 'PULN: ALZHEIMERS-GLENNER SAXONY | DOLN: DIALYSIS - X');
-  assert.equal(r.destinationRows[2]['Leg Notes'], 'DOLN: TARGET');
-});
-
-// ---- output_file_naming (v1.4.0) ----
-const { outputName } = require('../src/parser/csv-export');
-const { rules } = require('./helpers');
-
+// ---- output_file_naming (v1.4.0, kept) ----
 const naming = rules.file_contract.output_file_naming;
 const changed = { originalDate: parseTripDate('2026-10-23'), newDate: parseTripDate('2026-11-12') };
 
 test('AT-18 date changed: new date replaces the original one in Output and Invalid Trips names', () => {
-  assert.equal(outputName('NCTD_Trips_10.23.26_1.xlsx', 'destination', naming, changed), 'NCTD_Trips_11.12.26_1_TOBI.CSV');
-  assert.equal(outputName('NCTD_Trips_10.23.26_1.xlsx', 'invalid_trips', naming, changed), 'NCTD_Trips_11.12.26_1_INVALID_TRIPS.CSV');
-  // Pasajeros is not renamed
-  assert.equal(outputName('Pasajeros.csv', 'pasajeros_updated', naming, changed), 'Pasajeros_UPDATED.CSV');
+  assert.equal(outputName('NCTD_Trips_10.23.26_1.xlsx', 'destination', naming, changed), 'NCTD_Trips_11.12.26_1_TOBI.csv');
+  assert.equal(outputName('NCTD_Trips_10.23.26_1.xlsx', 'invalid_trips', naming, changed), 'NCTD_Trips_11.12.26_1_INVALID_TRIPS.csv');
+  assert.equal(outputName('Pasajeros.csv', 'pasajeros_updated', naming, changed, new Date('2026-11-10T23:55:00Z')), 'NCTD_Passengers_20261110_UPDTD.csv');
 });
 
 test('AT-19 date changed and the name has no original date: new date is appended', () => {
-  assert.equal(outputName('Manifest.xlsx', 'destination', naming, changed), 'Manifest_11.12.26_TOBI.CSV');
-  // a different date in the name is not the trip date, so it stays
-  assert.equal(outputName('Trips_09.01.26.xlsx', 'destination', naming, changed), 'Trips_09.01.26_11.12.26_TOBI.CSV');
+  assert.equal(outputName('Manifest.xlsx', 'destination', naming, changed), 'Manifest_11.12.26_TOBI.csv');
 });
 
 test('AT-20 date not changed: names keep the Source base name', () => {
-  assert.equal(outputName('NCTD_Trips_10.23.26_1.xlsx', 'destination', naming), 'NCTD_Trips_10.23.26_1_TOBI.CSV');
+  assert.equal(outputName('NCTD_Trips_10.23.26_1.xlsx', 'destination', naming), 'NCTD_Trips_10.23.26_1_TOBI.csv');
 });
 
-test('every example in output_file_naming is honored, in the same date format', () => {
-  for (const ex of naming.when_trip_date_changed.examples) {
-    const dates = { originalDate: parseTripDate(ex.original_trip_date), newDate: parseTripDate(ex.new_trip_date) };
-    assert.equal(outputName(ex.source, 'destination', naming, dates), ex.destination, ex.source);
-    assert.equal(outputName(ex.source, 'invalid_trips', naming, dates), ex.invalid_trips, ex.source);
+test('blocking: collisions block the export and count each source row once', async () => {
+  const r = await run([row(), row({ Comments: 'different note' }), row({ 'Client ID': '1002', PUTime: '09:00' })]);
+  assert.equal(r.summary.exportReady, false);
+  assert.equal(r.summary.blockingErrors, 2);
+});
+
+test('AT-28 updated Pasajeros name is fixed, with the processing date', () => {
+  const now = new Date('2026-11-10T23:55:00Z'); // 17:55 in Mexico City
+  assert.equal(outputName('NCTD_Passengers.csv', 'pasajeros_updated', naming, {}, now), 'NCTD_Passengers_20261110_UPDTD.csv');
+  assert.equal(outputName('NCTD_Passengers_20261109_UPDTD.csv', 'pasajeros_updated', naming, {}, now), 'NCTD_Passengers_20261110_UPDTD.csv');
+  assert.equal(outputName(null, 'pasajeros_updated', naming, {}, now), 'NCTD_Passengers_20261110_UPDTD.csv');
+});
+
+test('AT-29 the date follows America/Mexico_City, not UTC', () => {
+  assert.equal(outputName(null, 'pasajeros_updated', naming, {}, new Date('2026-11-11T00:30:00Z')), 'NCTD_Passengers_20261110_UPDTD.csv');
+  assert.equal(outputName(null, 'pasajeros_updated', naming, {}, new Date('2026-11-11T06:30:00Z')), 'NCTD_Passengers_20261111_UPDTD.csv');
+});
+
+test('AT-30 every CSV output uses the lowercase .csv extension', () => {
+  for (const kind of ['destination', 'invalid_trips', 'pasajeros_updated']) {
+    assert.match(outputName('NCTD_Trips_10.23.26_1.xlsx', kind, naming), /\.csv$/);
   }
-  const early = { originalDate: parseTripDate('2026-01-05'), newDate: parseTripDate('2026-11-12') };
-  assert.equal(outputName('Trips 1-5-2026.xlsx', 'destination', naming, early), 'Trips 11-12-2026_TOBI.CSV');
-  assert.equal(outputName('Trips_20260105.csv', 'destination', naming, early), 'Trips_20261112_TOBI.CSV');
-  assert.equal(outputName('Trips_010526.csv', 'destination', naming, early), 'Trips_111226_TOBI.CSV');
+});
+
+const nameCase = async (name, type = 'CLI') => {
+  const r = await run([row(), row({ 'Client Name': name, 'Client ID': '2002', 'Passenger Ty': type, PUTime: '09:00:00' })]);
+  return r;
+};
+const assertBadName = (r) => {
+  assert.equal(r.destinationRows.length, 1);
+  assert.equal(r.invalidRows.length, 1);
+  assert.equal(r.invalidRows[0]['Invalid Fields'], 'Client Name');
+  assert.match(r.invalidRows[0]['Validation Errors'], /INVALID_CLIENT_NAME_FORMAT/);
+  assert.ok(r.exceptions.some((e) => e.code === 'INVALID_CLIENT_NAME_FORMAT' && e.severity === 'error'));
+  assert.equal(r.summary.exportReady, true);
+  assert.ok(!r.destinationRows.some((d) => d['Tobi MRN'].startsWith('2002')));
+};
+
+test('AT-34 Client Name without a comma -> Invalid Trips, export not blocked', async () => {
+  assertBadName(await nameCase('ALLOUCHE DEANNE'));
+  assertBadName(await nameCase('ALLOUCHE DEANNE - PCA', 'PCA'));
+});
+
+test('AT-35 Client Name with an empty part -> Invalid Trips', async () => {
+  assertBadName(await nameCase('ALLOUCHE,'));
+  assertBadName(await nameCase(' , DEANNE'));
+  assertBadName(await nameCase('ALLOUCHE,- PCA', 'PCA'));
+  const ok = await nameCase('ALLOUCHE , DEANNE');
+  assert.equal(ok.invalidRows.length, 0);
+  assert.equal(ok.destinationRows.length, 2);
+});
+
+test('AT-36 brackets removed from Client Name, enclosed text kept', async () => {
+  const r = await run([row({ 'Client Name': 'MATTHEWS,SCOTT  (MICHAEL)' })]);
+  assert.equal(r.destinationRows[0]['Last Name'], 'MATTHEWS');
+  assert.equal(r.destinationRows[0]['First Name'], 'SCOTT MICHAEL');
+  assert.deepEqual(r.catalog.rows.map((c) => c['First Name']), ['SCOTT MICHAEL']);
+  const pca = await run([row({ 'Client Name': '[DOE],(JANE) - PCA', 'Passenger Ty': 'PCA' })]);
+  assert.equal(pca.destinationRows[0]['First Name'], 'JANE-PCA');
+  assert.equal(pca.destinationRows[0]['Last Name'], 'DOE');
+});
+
+test('AT-37 brackets removed from address, city and ZIP before validation', async () => {
+  const r = await run([row({ PUAddress: '100 MAIN ST [REAR]', PUCity: '(OCEANSIDE)', PUZipcode: '(92054)', DOAddress: '200 MISSION AVE (STE 5)', DOCity: '[VISTA]', DOZipcode: '[92081]' })]);
+  assert.equal(r.invalidRows.length, 0);
+  const d = r.destinationRows[0];
+  assert.equal(d['Pickup Address'], '100 MAIN ST REAR');
+  assert.equal(d['Pickup City'], 'OCEANSIDE');
+  assert.equal(d['Pickup Zip'], '92054');
+  assert.equal(d['Dropoff Address'], '200 MISSION AVE');
+  assert.equal(d['Dropoff Suite'], 'STE 5');
+  assert.equal(d['Dropoff City'], 'VISTA');
+  assert.equal(d['Dropoff Zip'], '92081');
+  // pairing still works with brackets on one leg only
+  const a = row({ PUAddress: '100 MAIN ST (REAR)' });
+  const p = await run([a, returnOf(row({ PUAddress: '100 MAIN ST REAR' }))]);
+  assert.deepEqual(p.destinationRows.map((x) => x['Pair Status']), ['Paired', 'Paired']);
+});
+
+test('AT-38 invalid row keeps its original values, brackets included', async () => {
+  const r = await run([row({ 'Client Name': 'MATTHEWS,SCOTT  (MICHAEL)', PUCity: '()' })]);
+  assert.equal(r.invalidRows.length, 1);
+  assert.equal(r.invalidRows[0]['Client Name'], 'MATTHEWS,SCOTT  (MICHAEL)');
+  assert.equal(r.invalidRows[0].PUCity, '()');
+  assert.match(r.invalidRows[0]['Validation Errors'], /PUCity: missing value/);
 });

@@ -1,0 +1,1111 @@
+{
+  "suite": "NCTD Manifest Parser v2.0 Acceptance Tests",
+  "version": "2.0",
+  "test_cases": [
+    {
+      "id": "TC-001",
+      "title": "CLI unpaired leg",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "Vendor ID": "82475202610230755",
+          "Leg ID": "82475202610230755A",
+          "Pair Status": "Unpaired"
+        }
+      ],
+      "assertions": [
+        "IDs alphanumeric",
+        "single leg assigned A"
+      ]
+    },
+    {
+      "id": "TC-002",
+      "title": "CLI reciprocal A/B pair",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "15:30",
+          "PUAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "PUCity": "CARLSBAD",
+          "PUZipcode": "92011",
+          "DOAddress": "2606 DEL MAR HEIGHTS RD",
+          "DOCity": "DEL MAR",
+          "DOZipcode": "92014",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        },
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "PUTime": "07:55",
+          "Leg": "A",
+          "Leg ID": "82475202610230755A"
+        },
+        {
+          "PUTime": "15:30",
+          "Leg": "B",
+          "Leg ID": "82475202610231530B"
+        }
+      ],
+      "assertions": [
+        "order of source rows does not control A/B",
+        "Leg IDs unique"
+      ]
+    },
+    {
+      "id": "TC-003",
+      "title": "PCA unpaired leg",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "PCA",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "Tobi MRN": "82475PCA",
+          "First Name": "DEANNE - PCA",
+          "Last Name": "ALLOUCHE COMPANION",
+          "Vendor ID": "82475202610230755PCA",
+          "Leg ID": "82475202610230755PCAA"
+        }
+      ],
+      "assertions": [
+        "PCAA is alphanumeric",
+        "suffixes added once"
+      ]
+    },
+    {
+      "id": "TC-004",
+      "title": "PCA reciprocal A/B pair",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "PCA",
+          "Space Type": "AM",
+          "Comments": ""
+        },
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "15:30",
+          "PUAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "PUCity": "CARLSBAD",
+          "PUZipcode": "92011",
+          "DOAddress": "2606 DEL MAR HEIGHTS RD",
+          "DOCity": "DEL MAR",
+          "DOZipcode": "92014",
+          "Passenger Ty": "PCA",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "PUTime": "07:55",
+          "Leg ID": "82475202610230755PCAA"
+        },
+        {
+          "PUTime": "15:30",
+          "Leg ID": "82475202610231530PCAB"
+        }
+      ],
+      "assertions": [
+        "PCAA and PCAB accepted by regex",
+        "unique IDs"
+      ]
+    },
+    {
+      "id": "TC-005",
+      "title": "COM normalized as companion",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "COM",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "Tobi MRN": "82475PCA",
+          "Vendor ID": "82475202610230755PCA",
+          "Leg ID": "82475202610230755PCAA"
+        }
+      ],
+      "assertions": [
+        "canonical suffix PCA"
+      ]
+    },
+    {
+      "id": "TC-006",
+      "title": "COMP normalized as companion",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "COMP",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "Tobi MRN": "82475PCA",
+          "Vendor ID": "82475202610230755PCA",
+          "Leg ID": "82475202610230755PCAA"
+        }
+      ],
+      "assertions": [
+        "canonical suffix PCA"
+      ]
+    },
+    {
+      "id": "TC-007",
+      "title": "CLI and companion at same pickup",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        },
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "PCA",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "type": "CLI",
+          "Vendor ID": "82475202610230755",
+          "Leg ID": "82475202610230755A"
+        },
+        {
+          "type": "PCA",
+          "Vendor ID": "82475202610230755PCA",
+          "Leg ID": "82475202610230755PCAA"
+        }
+      ],
+      "assertions": [
+        "no CLI/PCA collision"
+      ]
+    },
+    {
+      "id": "TC-008",
+      "title": "Exact duplicate removal",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        },
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "output_row_count": 1,
+          "duplicates_removed": 1
+        }
+      ],
+      "assertions": [
+        "first row retained",
+        "no collision raised"
+      ]
+    },
+    {
+      "id": "TC-009",
+      "title": "Vendor ID collision after deduplication",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        },
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": "different operational note"
+        }
+      ],
+      "expected": [
+        {
+          "error": "VENDOR_ID_COLLISION",
+          "export_ready": false
+        }
+      ],
+      "assertions": [
+        "rows differ so neither is silently deleted",
+        "export blocked"
+      ]
+    },
+    {
+      "id": "TC-010",
+      "title": "Leg ID collision after deduplication",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        },
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": "different operational note"
+        }
+      ],
+      "expected": [
+        {
+          "error": "LEG_ID_COLLISION",
+          "export_ready": false
+        }
+      ],
+      "assertions": [
+        "export blocked"
+      ]
+    },
+    {
+      "id": "TC-011",
+      "title": "Multiple distinct bookings same client/date",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        },
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "12:00",
+          "PUAddress": "100 MAIN ST",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "200 OAK ST",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "Leg ID": "82475202610230755A"
+        },
+        {
+          "Leg ID": "82475202610231200A"
+        }
+      ],
+      "assertions": [
+        "HHMM prevents collision"
+      ]
+    },
+    {
+      "id": "TC-012",
+      "title": "Missing Client ID",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "error": "MISSING_ID_COMPONENT",
+          "field": "Client ID",
+          "export_ready": false
+        }
+      ],
+      "assertions": [
+        "no ID generated"
+      ]
+    },
+    {
+      "id": "TC-013",
+      "title": "Missing pickup time",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "error": "MISSING_ID_COMPONENT",
+          "field": "PUTime",
+          "export_ready": false
+        }
+      ],
+      "assertions": [
+        "no fallback timestamp"
+      ]
+    },
+    {
+      "id": "TC-014",
+      "title": "Client ID contains special characters",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82-475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "AlnumClientID": "82475",
+          "Vendor ID": "82475202610230755"
+        }
+      ],
+      "assertions": [
+        "generated ID matches alphanumeric regex"
+      ]
+    },
+    {
+      "id": "TC-015",
+      "title": "PCA idempotency",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE COMPANION,DEANNE - PCA",
+          "Client ID": "82475PCA",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "PCA",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "Tobi MRN": "82475PCA",
+          "First Name": "DEANNE - PCA",
+          "Last Name": "ALLOUCHE COMPANION"
+        }
+      ],
+      "assertions": [
+        "no PCAPCA",
+        "no repeated name suffix"
+      ]
+    },
+    {
+      "id": "TC-016",
+      "title": "Visual impairment typo",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": "MUST CALL AND IDENTIFY - VISIUALLY IMPAIRED"
+        }
+      ],
+      "expected": [
+        {
+          "Tobi Tags": "Visually Impaired"
+        }
+      ],
+      "assertions": [
+        "misspelled source phrase recognized"
+      ]
+    },
+    {
+      "id": "TC-017",
+      "title": "CBLA and visual impairment multivalue",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": "CBLA; ONE EYE BLIND"
+        }
+      ],
+      "expected": [
+        {
+          "Tobi Tags": "Cannot Be Left Alone, Visually Impaired"
+        }
+      ],
+      "assertions": [
+        "both distinct tags retained"
+      ]
+    },
+    {
+      "id": "TC-018",
+      "title": "Space Type LR",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "LR",
+          "Comments": "Existing note"
+        }
+      ],
+      "expected": [
+        {
+          "Seating Need": "Ambulatory",
+          "Service Type": "Ambulatory",
+          "Booking Notes": "Existing note, Lift Required"
+        }
+      ],
+      "assertions": [
+        "multivalue separator correct"
+      ]
+    },
+    {
+      "id": "TC-019",
+      "title": "Space Type SC",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "SC",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "Seating Need": "Bariatric Wheelchair",
+          "Service Type": "Bariatric Wheelchair"
+        }
+      ],
+      "assertions": [
+        "mapping correct"
+      ]
+    },
+    {
+      "id": "TC-020",
+      "title": "Space Type WH",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "WH",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "Seating Need": "Wheelchair",
+          "Service Type": "Wheelchair"
+        }
+      ],
+      "assertions": [
+        "mapping correct"
+      ]
+    },
+    {
+      "id": "TC-021",
+      "title": "Space Type XW",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "XW",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "Seating Need": "Bariatric Wheelchair",
+          "Service Type": "Bariatric Wheelchair"
+        }
+      ],
+      "assertions": [
+        "mapping correct"
+      ]
+    },
+    {
+      "id": "TC-022",
+      "title": "Space Type ZZ",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "ZZ",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "Seating Need": "Ambulatory",
+          "Service Type": "Ambulatory"
+        }
+      ],
+      "assertions": [
+        "mapping correct"
+      ]
+    },
+    {
+      "id": "TC-023",
+      "title": "Three unpaired trips same day",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        },
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "12:00",
+          "PUAddress": "100 MAIN ST",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "200 OAK ST",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        },
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "18:45",
+          "PUAddress": "300 PINE ST",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "400 ELM ST",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "Leg IDs": [
+            "82475202610230755A",
+            "82475202610231200A",
+            "82475202610231845A"
+          ]
+        }
+      ],
+      "assertions": [
+        "all unique",
+        "no unsupported C introduced"
+      ]
+    },
+    {
+      "id": "TC-024",
+      "title": "Ambiguous reciprocal pairing",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        },
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "15:30",
+          "PUAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "PUCity": "CARLSBAD",
+          "PUZipcode": "92011",
+          "DOAddress": "2606 DEL MAR HEIGHTS RD",
+          "DOCity": "DEL MAR",
+          "DOZipcode": "92014",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        },
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "16:00",
+          "PUAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "PUCity": "CARLSBAD",
+          "PUZipcode": "92011",
+          "DOAddress": "2606 DEL MAR HEIGHTS RD",
+          "DOCity": "DEL MAR",
+          "DOZipcode": "92014",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "error": "AMBIGUOUS_PAIRING",
+          "export_ready": false
+        }
+      ],
+      "assertions": [
+        "parser does not guess"
+      ]
+    },
+    {
+      "id": "TC-025",
+      "title": "Reprocessing stability",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "run1_vendor": "82475202610230755",
+          "run2_vendor": "82475202610230755",
+          "run1_leg": "82475202610230755A",
+          "run2_leg": "82475202610230755A"
+        }
+      ],
+      "assertions": [
+        "deterministic IDs"
+      ]
+    },
+    {
+      "id": "TC-026",
+      "title": "Different dates same client/time",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        },
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-24",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "Vendor IDs": [
+            "82475202610230755",
+            "82475202610240755"
+          ]
+        }
+      ],
+      "assertions": [
+        "no collision"
+      ]
+    },
+    {
+      "id": "TC-027",
+      "title": "Same minute, different seconds",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55:10",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        },
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55:50",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": "second trip"
+        }
+      ],
+      "expected": [
+        {
+          "error": "VENDOR_ID_COLLISION",
+          "reason": "HHMM truncates seconds"
+        }
+      ],
+      "assertions": [
+        "block export",
+        "document minute-granularity risk"
+      ]
+    },
+    {
+      "id": "TC-028",
+      "title": "Illegal special character scan",
+      "severity": "Critical",
+      "inputs": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Client ID": "82475",
+          "TripDate": "2026-10-23",
+          "PUTime": "07:55",
+          "PUAddress": "2606 DEL MAR HEIGHTS RD",
+          "PUCity": "DEL MAR",
+          "PUZipcode": "92014",
+          "DOAddress": "2245 CAMINO VIDA ROBLE UNIT100",
+          "DOCity": "CARLSBAD",
+          "DOZipcode": "92011",
+          "Passenger Ty": "CLI",
+          "Space Type": "AM",
+          "Comments": ""
+        }
+      ],
+      "expected": [
+        {
+          "Vendor ID regex": "^[A-Za-z0-9]+$",
+          "Leg ID regex": "^[A-Za-z0-9]+$"
+        }
+      ],
+      "assertions": [
+        "no hyphen, underscore or spaces in IDs"
+      ]
+    }
+  ]
+}

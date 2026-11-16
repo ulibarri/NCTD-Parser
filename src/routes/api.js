@@ -3,8 +3,8 @@
 const express = require('express');
 const multer = require('multer');
 const { readTable, IngestionError } = require('../parser/ingestion');
-const { processViajes, distinctTripDates, applyTripDateOverride, ProcessingError } = require('../parser/pipeline');
-const { updatePasajeros, PASAJEROS_COLUMNS } = require('../parser/pasajeros');
+const { processViajes, distinctTripDates, applyTripDateOverride, ProcessingError, parseSequenceStart } = require('../parser/pipeline');
+const { PASAJEROS_COLUMNS } = require('../parser/pasajeros');
 const { toCsv, outputName } = require('../parser/csv-export');
 const D = require('../parser/dates');
 const F = require('../parser/fields');
@@ -37,7 +37,7 @@ function viajesRequiredColumns(rules) {
   ])];
 }
 
-function createApiRouter({ rules, registry, uploads, jobs }) {
+function createApiRouter({ rules, uploads, jobs }) {
   const router = express.Router();
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_BYTES, files: 1 } });
   const single = (req, res, next) => upload.single('file')(req, res, (err) => {
@@ -124,21 +124,27 @@ function createApiRouter({ rules, registry, uploads, jobs }) {
         assertSingleDate(viajes);
       }
 
-      const result = await processViajes({ table: viajes.table, rules, overrideDate, registry });
-      const defaultPhone = rules.field_rules.phones['Primary Phone'].default;
-      const pas = updatePasajeros(pasajeros && pasajeros.table, result.destinationRows, defaultPhone);
+      let legIdV2Sequence = null;
+      if (body.legIdV2Sequential === true) {
+        const start = parseSequenceStart(body.legIdV2Start, rules);
+        if (start === null) return res.status(400).json({ error: 'INVALID_SEQUENCE_START' });
+        legIdV2Sequence = { start };
+      }
+      const result = await processViajes({ table: viajes.table, rules, overrideDate, catalog: pasajeros && pasajeros.table, legIdV2Mode: body.legIdV2Mode === true, legIdV2Sequence });
+      const pas = result.catalog;
 
       // output_file_naming: a changed trip date is reflected in the Output and Invalid Trips names.
       const naming = rules.file_contract.output_file_naming;
       const dates = overrideDate ? { originalDate: D.parseTripDate(viajes.tripDates[0]), newDate: overrideDate } : {};
       const files = {
-        output: { filename: outputName(viajes.filename, 'destination', naming, dates), csv: toCsv(result.destinationColumns, result.destinationRows) },
-        pasajeros: { filename: outputName(pasajeros ? pasajeros.filename : null, 'pasajeros_updated', naming), csv: toCsv(pas.headers, pas.rows) },
+        // export_gate: Output is only produced when there is no blocking error
+        ...(result.summary.exportReady ? { output: { filename: outputName(viajes.filename, 'destination', naming, dates), csv: toCsv(result.destinationColumns, result.destinationRows) } } : {}),
+        pasajeros: { filename: outputName(pasajeros ? pasajeros.filename : null, 'pasajeros_updated', naming, {}, new Date()), csv: toCsv(pas.headers, pas.rows) },
       };
       if (result.invalidRows.length) {
         files.invalid = { filename: outputName(viajes.filename, 'invalid_trips', naming, dates), csv: toCsv(result.invalidColumns, result.invalidRows) };
       }
-      const summary = { ...result.summary, pasajerosAdded: pas.added };
+      const { summary } = result;
       const jobId = jobs.add({ files, destinationRows: result.destinationRows, columns: result.destinationColumns, summary });
 
       const downloads = Object.fromEntries(Object.entries(files).map(([k, f]) => [k, { filename: f.filename, url: `/api/jobs/${jobId}/${k === 'invalid' ? 'invalid-trips' : k}` }]));

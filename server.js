@@ -3,7 +3,6 @@
 const path = require('node:path');
 const express = require('express');
 const { loadRules } = require('./src/rules');
-const { JsonRegistry } = require('./src/registry/json-registry');
 const { TtlStore } = require('./src/store');
 const { createApiRouter } = require('./src/routes/api');
 const { dictionaries, pickLang, translator, LANGS } = require('./src/i18n');
@@ -12,9 +11,8 @@ const PORT = Number(process.env.PORT) || 3600;
 const HOST = process.env.HOST || '0.0.0.0';
 const RESULT_TTL_MS = 2 * 60 * 60 * 1000; // uploaded and generated files live 2 hours
 
-function createApp({ rules = loadRules(), registryFile = process.env.REGISTRY_FILE || path.join(__dirname, 'data', 'journey-registry.json') } = {}) {
+function createApp({ rules = loadRules() } = {}) {
   const app = express();
-  const registry = new JsonRegistry(registryFile, { retentionHours: rules.journey_leg_rules.fingerprint.retention_hours });
   const uploads = new TtlStore(RESULT_TTL_MS);
   const jobs = new TtlStore(RESULT_TTL_MS);
 
@@ -49,7 +47,7 @@ function createApp({ rules = loadRules(), registryFile = process.env.REGISTRY_FI
 
   app.get('/healthz', (req, res) => res.json({ ok: true, rulesVersion: rules.specification.version }));
 
-  app.use('/api', createApiRouter({ rules, registry, uploads, jobs }));
+  app.use('/api', createApiRouter({ rules, uploads, jobs }));
   return app;
 }
 

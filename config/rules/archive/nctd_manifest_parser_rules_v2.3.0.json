@@ -1,0 +1,1382 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "specification": {
+    "id": "nctd-manifest-parser",
+    "name": "NCTD Manifest Parser",
+    "organization": "North County Transit District",
+    "version": "2.3.0",
+    "status": "candidate_for_local_validation",
+    "target_runtime": "Node.js",
+    "updated": "2026-11-10",
+    "description": "Consolidated NCTD manifest parser rules. Version 2.3.0 removes the visible First Name suffix \" - PCA\" for companions, retains \" COMPANION\" in Last Name, preserves PCA in technical identifiers, and migrates legacy passenger-catalog names.",
+    "changelog": [
+      {
+        "version": "2.3.0",
+        "date": "2026-11-10",
+        "changes": [
+          "Removed COMPANION-FIRSTNAME-001: PCA, COM and COMP no longer receive the visible First Name suffix \" - PCA\".",
+          "Retained COMPANION-LASTNAME-001: companion Last Name ends with \" COMPANION\" exactly once.",
+          "Added CATALOG-PCA-FIRSTNAME-MIGRATION-001 to remove one legacy trailing \" - PCA\" from companion First Name values in the passenger catalog.",
+          "PCA remains unchanged in Tobi MRN, Vendor ID and Leg ID, including PCAA and PCAB.",
+          "Updated examples, catalog behavior, acceptance tests and consistency controls."
+        ]
+      },
+      {
+        "version": "2.2.1",
+        "date": "2026-11-10",
+        "changes": [
+          "Removed executable references to Journey ID, journey sequences and Leg Group Key; these concepts remain deprecated only.",
+          "Aligned Node.js module and type recommendations with reciprocal leg pairing instead of journey matching.",
+          "Added missing acceptance tests AT-05 and AT-13 so the embedded sequence is complete from AT-01 through AT-30.",
+          "Clarified that Vendor ID, Leg ID and passenger-catalog identity rules use the same alphanumeric Client ID normalization.",
+          "Updated the acceptance suite metadata for the consolidated v2.2.1 rules while retaining the v2.0 detailed cases as the regression baseline."
+        ]
+      },
+      {
+        "version": "2.2.0",
+        "date": "2026-11-10",
+        "changes": [
+          "Every CSV output file uses the lowercase extension .csv (TOBI does not recognize .CSV).",
+          "The updated Pasajeros file is always named NCTD_Passengers_<YYYYMMDD>_UPDTD.csv, with the processing date in America/Mexico_City, whatever the uploaded file was called.",
+          "Processing twice on the same day produces the same name; always upload the most recent download.",
+          "Added acceptance tests AT-28 to AT-30."
+        ]
+      },
+      {
+        "version": "2.1.0",
+        "date": "2026-11-10",
+        "changes": [
+          "Added passenger_catalog (CATALOG-001): the Pasajeros file is the passenger master catalog. The first time a passenger arrives, its First Name, Last Name, Tobi MRN and Primary Phone become the source of truth and are never changed, to avoid aliases in TOBI.",
+          "Companions (PCA, COM, COMP) get their own catalog rows (for example 82475PCA).",
+          "New passengers without a phone are stored with 9876543210.",
+          "Added NO_PASSENGER_CATALOG, CATALOG_DUPLICATE_MRN and CATALOG_PHONE_INVALID.",
+          "Added acceptance tests AT-21 to AT-27."
+        ]
+      },
+      {
+        "version": "2.0.1",
+        "date": "2026-11-10",
+        "changes": [
+          "Tobi Tags: the Cannot Be Left Alone tag is written as CBLA (decision 2026-11-10). Detection phrases are unchanged.",
+          "Test matrix: TC-017 expects \"CBLA, Visually Impaired\" (acceptance_test_suite.expected_overrides)."
+        ]
+      },
+      {
+        "version": "2.0.0",
+        "date": "2026-11-10",
+        "changes": [
+          "Identifiers (ID-POLICY-001): Vendor ID and Leg ID are strictly alphanumeric and deterministic: {AlnumClientID}{YYYYMMDD}{HHMM}[PCA][A|B]. Journey ID, its daily sequence and the 72-hour fingerprint registry are removed.",
+          "Output columns: Journey ID removed; Vendor ID and Pair Status added (32 columns).",
+          "Companions (PCA, COM, COMP): Tobi MRN {AlnumClientID}PCA, First Name + \" - PCA\", Last Name + \" COMPANION\", each exactly once. Companions are paired among themselves; a companion without a client is no longer an error.",
+          "Pairing (PAIRING-001): group by AlnumClientID, effective trip date and companion status; reciprocal addresses; earlier pickup = A, later = B; unpaired = A with Pair Status Unpaired; paired rows get Pair Status Paired.",
+          "Collisions: VENDOR_ID_COLLISION, LEG_ID_COLLISION and AMBIGUOUS_PAIRING block the export of the Output file.",
+          "Rows with an empty or invalid required field still go to Invalid Trips and do not block the export; a missing identifier component is reported as MISSING_ID_COMPONENT.",
+          "Tags: values Cannot Be Left Alone and Visually Impaired; phrases are the union of v1.4.0 and v2.0 (adds CBLA and CAN NOT BE LEFT ALONE); sources Comments, Assisted, PickUpLocationName and DropLocationName.",
+          "Pair Status value for reciprocal pairs set to Paired (v2.0 only defines Unpaired).",
+          "Superseded: Leg_ID_A/Leg_ID_B (rules document v1.3 of 2026-11-10), Journey ID, ASSISTANT_WITHOUT_CLIENT, MULTIPLE_CLIENTS_SAME_LEG and the other journey exceptions."
+        ]
+      },
+      {
+        "version": "1.4.0",
+        "date": "2026-11-09",
+        "changes": [
+          "Added file_contract.output_file_naming: names of the Output, Invalid Trips and updated Pasajeros files.",
+          "When the trip date is changed, the new date appears in the Output and Invalid Trips file names.",
+          "Added acceptance tests AT-18 to AT-20."
+        ]
+      },
+      {
+        "version": "1.3.0",
+        "date": "2026-11-09",
+        "changes": [
+          "Added trip_date_override: optional replacement of TripDate before processing.",
+          "Journey ID and Leg ID use the effective trip date, so they change when the trip date is changed.",
+          "Added trip_date_constraints: one TripDate per Source file; pickup and dropoff on the same day.",
+          "Added exception UNKNOWN_PASSENGER_TYPE (error) for Passenger Ty values outside passenger_types.",
+          "Added acceptance tests AT-14 to AT-17.",
+          "Confirmed: Pickup Gate Code drops the leading # (GATE CODE #7444 -> 7444).",
+          "Confirmed: rows with an unknown Passenger Ty go to Invalid Trips with UNKNOWN_PASSENGER_TYPE."
+        ]
+      },
+      {
+        "version": "1.2.0",
+        "date": "2026-11-09",
+        "changes": [
+          "Previous baseline."
+        ]
+      }
+    ],
+    "merge_policy": {
+      "base": "nctd_manifest_parser_rules_v1.4.0.json",
+      "change_source": "NCTD_Manifest_Parser_Rules_v2.0.json (2026-11-10)",
+      "v2_wins_on": [
+        "identifiers",
+        "companions",
+        "tags",
+        "collisions"
+      ],
+      "kept_from_v1_4_0": [
+        "everything v2.0 does not mention",
+        "Pickup Gate Code column",
+        "Primary/Secondary Phone with default 9876543210",
+        "Trip Purpose mapping and default Appointment",
+        "Trip Date format YYYY-MM-DD HH:mm:ss.SSS",
+        "Leg Notes format PULN/DOLN",
+        "Pickup/Dropoff Suite columns"
+      ],
+      "decided_by": "Majo, 2026-11-10"
+    }
+  },
+  "deployment_policy": {
+    "local_validation_required": true,
+    "production_remains_on_previous_version_until_approval": true,
+    "promotion_gate": [
+      "all_critical_tests_pass",
+      "TOBI_test_import_accepts_ids",
+      "reimport_does_not_duplicate",
+      "business_approval"
+    ]
+  },
+  "architecture": {
+    "authoritative_component": "centralized parsing service",
+    "clients": [
+      "WebApp",
+      "API",
+      "chatbot"
+    ],
+    "identifier_registry": "not required: identifiers are deterministic (VAL-006)"
+  },
+  "file_contract": {
+    "accepted_source_formats": [
+      "xlsx",
+      "csv"
+    ],
+    "outputs": {
+      "destination": {
+        "format": "csv",
+        "contains": "valid parsed records only"
+      },
+      "invalid_trips": {
+        "format": "csv",
+        "contains": "complete original invalid Source rows",
+        "additional_columns": [
+          "Source Row Number",
+          "Validation Status",
+          "Invalid Fields",
+          "Validation Errors"
+        ]
+      }
+    },
+    "output_file_naming": {
+      "extension": ".csv",
+      "files": {
+        "destination": {
+          "pattern": "<Source base name>_TOBI.csv",
+          "suffix": "_TOBI"
+        },
+        "invalid_trips": {
+          "pattern": "<Source base name>_INVALID_TRIPS.csv",
+          "suffix": "_INVALID_TRIPS"
+        },
+        "pasajeros_updated": {
+          "pattern": "NCTD_Passengers_<YYYYMMDD>_UPDTD.csv",
+          "fixed_name": true,
+          "prefix": "NCTD_Passengers_",
+          "suffix": "_UPDTD",
+          "date_format": "YYYYMMDD",
+          "date_source": "processing date (the day the catalog is updated), not the trip date",
+          "timezone": "America/Mexico_City",
+          "ignores_uploaded_name": true,
+          "same_day_reprocessing": "Same name; the browser saves later downloads as \"... (1).csv\". Always upload the most recent one.",
+          "examples": [
+            {
+              "uploaded": "NCTD_Passengers.csv",
+              "processed_at": "2026-11-10 17:55 America/Mexico_City",
+              "updated": "NCTD_Passengers_20261110_UPDTD.csv"
+            },
+            {
+              "uploaded": "NCTD_Passengers_20261110_UPDTD.csv",
+              "processed_at": "2026-11-11 09:00 America/Mexico_City",
+              "updated": "NCTD_Passengers_20261111_UPDTD.csv"
+            },
+            {
+              "uploaded": "(none)",
+              "processed_at": "2026-11-10 18:30 America/Mexico_City (2026-11-11 00:30 UTC)",
+              "updated": "NCTD_Passengers_20261110_UPDTD.csv"
+            }
+          ]
+        }
+      },
+      "source_base_name": "Source file name without its extension.",
+      "when_trip_date_changed": {
+        "applies_to": [
+          "destination",
+          "invalid_trips"
+        ],
+        "not_applied_to": [
+          "pasajeros_updated"
+        ],
+        "rule": "If the Source base name contains the original trip date in a recognized format, replace it with the new date written in the same format. Otherwise append an underscore and the new date in the fallback format to the Source base name, before the suffix.",
+        "date_token_boundaries": "The date must not be preceded or followed by a digit.",
+        "recognized_formats": [
+          "MM.DD.YY",
+          "MM.DD.YYYY",
+          "M.D.YY",
+          "M.D.YYYY",
+          "MM-DD-YY",
+          "MM-DD-YYYY",
+          "M-D-YY",
+          "M-D-YYYY",
+          "MM_DD_YY",
+          "MM_DD_YYYY",
+          "M_D_YY",
+          "M_D_YYYY",
+          "YYYY-MM-DD",
+          "YYYY.MM.DD",
+          "YYYY_MM_DD",
+          "YYYYMMDD",
+          "MMDDYYYY",
+          "MMDDYY"
+        ],
+        "fallback_format": "MM.DD.YY",
+        "examples": [
+          {
+            "source": "NCTD_Trips_10.23.26_1.xlsx",
+            "original_trip_date": "2026-10-23",
+            "new_trip_date": "2026-11-12",
+            "destination": "NCTD_Trips_11.12.26_1_TOBI.csv",
+            "invalid_trips": "NCTD_Trips_11.12.26_1_INVALID_TRIPS.csv"
+          },
+          {
+            "source": "Manifest_2026-10-23.xlsx",
+            "original_trip_date": "2026-10-23",
+            "new_trip_date": "2026-11-12",
+            "destination": "Manifest_2026-11-12_TOBI.csv",
+            "invalid_trips": "Manifest_2026-11-12_INVALID_TRIPS.csv"
+          },
+          {
+            "source": "Manifest.xlsx",
+            "original_trip_date": "2026-10-23",
+            "new_trip_date": "2026-11-12",
+            "destination": "Manifest_11.12.26_TOBI.csv",
+            "invalid_trips": "Manifest_11.12.26_INVALID_TRIPS.csv"
+          }
+        ]
+      },
+      "extension_note": "Lowercase on purpose: TOBI does not recognize .CSV (decision 2026-11-10). Applies to every CSV output."
+    },
+    "encoding": "UTF-8 with BOM",
+    "required_for_identifier_generation": [
+      "Client ID",
+      "TripDate",
+      "PUTime",
+      "Passenger Ty"
+    ],
+    "export_gate": {
+      "export_ready_when": "no blocking exception (VENDOR_ID_COLLISION, LEG_ID_COLLISION, AMBIGUOUS_PAIRING, INVALID_VENDOR_ID, INVALID_LEG_ID)",
+      "when_blocked": "The Output file is not produced; Invalid Trips, the updated Pasajeros file and the summary are still available so the source can be corrected."
+    }
+  },
+  "trip_date_constraints": {
+    "single_trip_date_per_file": true,
+    "same_day_trips": true,
+    "description": "Every valid row in a Source file shares one TripDate. NCTD trips always start and end on the same day, so Pickup Time and Dropoff Time use the same date and never cross midnight.",
+    "multiple_dates_action": {
+      "code": "MULTIPLE_TRIP_DATES",
+      "severity": "error",
+      "effect": "Block trip_date_override and report the distinct dates found."
+    }
+  },
+  "source_columns": [
+    "Client Name",
+    "Client ID",
+    "TripDate",
+    "PUTime",
+    "PUAddress",
+    "PUCity",
+    "PUZipcode",
+    "DOAddress",
+    "DOCity",
+    "DOZipcode",
+    "DNLA",
+    "MapQMiles",
+    "Assisted",
+    "PickUpLocationName",
+    "DropLocationName",
+    "Passenger Ty",
+    "Space Type",
+    "Amount",
+    "DOAppt",
+    "Comments",
+    "NoClients",
+    "PULat",
+    "PULon",
+    "DOLat",
+    "DOLon",
+    "Subtype",
+    "FareType",
+    "CashTck",
+    "Run Name"
+  ],
+  "destination_columns": [
+    "Vendor ID",
+    "Leg ID",
+    "Pair Status",
+    "Last Name",
+    "First Name",
+    "Middle Name",
+    "Tobi MRN",
+    "Trip Date",
+    "Pickup Time",
+    "Dropoff Time",
+    "Mode",
+    "Service Area",
+    "Pickup Address",
+    "Pickup Suite",
+    "Pickup City",
+    "Pickup State",
+    "Pickup Zip",
+    "Dropoff Address",
+    "Dropoff Suite",
+    "Dropoff City",
+    "Dropoff State",
+    "Dropoff Zip",
+    "Booking Fare",
+    "Pickup Gate Code",
+    "Primary Phone",
+    "Secondary Phone",
+    "Tobi Tags",
+    "Trip Purpose",
+    "Leg Notes",
+    "Booking Notes",
+    "Seating Need",
+    "Service Type"
+  ],
+  "processing_pipeline": [
+    "read_source",
+    "preserve_original_rows",
+    "apply_trip_date_override",
+    "validate_required_fields",
+    "route_invalid_rows",
+    "normalize_valid_rows",
+    "remove_exact_duplicates",
+    "classify_passengers",
+    "build_id_components",
+    "pair_reciprocal_legs",
+    "generate_vendor_id",
+    "generate_leg_id",
+    "map_destination_fields",
+    "validate_destination",
+    "detect_collisions",
+    "write_destination_csv_if_export_ready",
+    "write_invalid_trips_csv",
+    "write_summary"
+  ],
+  "required_field_validation": {
+    "fields": [
+      "Client Name",
+      "Client ID",
+      "TripDate",
+      "PUTime",
+      "PUAddress",
+      "PUCity",
+      "PUZipcode",
+      "DOAddress",
+      "DOCity",
+      "DOZipcode",
+      "Passenger Ty"
+    ],
+    "missing_markers_case_insensitive": [
+      "",
+      "EMPTY",
+      "N/A",
+      "NA",
+      "NULL",
+      "NONE"
+    ],
+    "format_rules": {
+      "TripDate": [
+        "Excel serial date",
+        "MM/DD/YYYY",
+        "MM/DD/YY",
+        "YYYY-MM-DD"
+      ],
+      "PUTime": [
+        "Excel fractional day",
+        "HH:mm",
+        "HH:mm:ss"
+      ],
+      "PUZipcode": "^[0-9]{5}(?:-[0-9]{4})?$",
+      "DOZipcode": "^[0-9]{5}(?:-[0-9]{4})?$"
+    },
+    "invalid_action": {
+      "route_to": "invalid_trips",
+      "status": "INVALID",
+      "do_not": [
+        "repair or infer data",
+        "assign Leg ID",
+        "participate in grouping",
+        "assign Vendor ID",
+        "participate in pairing or collision detection"
+      ]
+    },
+    "missing_id_component": {
+      "fields": [
+        "Client ID",
+        "TripDate",
+        "PUTime",
+        "Passenger Ty"
+      ],
+      "code": "MISSING_ID_COMPONENT",
+      "action": "route the row to invalid_trips; does not block the export (decision 2026-11-10)",
+      "also_when": "Client ID has no letters or digits after id_component_cleanup"
+    }
+  },
+  "trip_date_override": {
+    "enabled_by_default": false,
+    "trigger": "User enables the change-date option and selects a new date.",
+    "input_format": "YYYY-MM-DD",
+    "source_field": "TripDate",
+    "effective_trip_date": "The new date when the override is applied; otherwise the original normalized TripDate.",
+    "apply_to": "every Source row whose original TripDate is valid",
+    "rows_with_missing_or_invalid_TripDate": "Leave unchanged; they are routed to invalid_trips by required_field_validation.",
+    "unchanged_fields": [
+      "PUTime",
+      "DOAppt"
+    ],
+    "preserve_original_values": true,
+    "invalid_trips_output": "Write the original Source row values, including the original TripDate.",
+    "affected_destination_fields": {
+      "Trip Date": "effective trip date",
+      "Pickup Time": "effective trip date + PUTime",
+      "Dropoff Time": "effective trip date + DOAppt; empty when DOAppt is empty",
+      "Vendor ID": "YYYYMMDD from the effective trip date",
+      "Leg ID": "YYYYMMDD from the effective trip date"
+    },
+    "identifier_rule": "Vendor ID, Leg ID and pairing use the effective trip date, never the original TripDate, when an override is applied.",
+    "example": {
+      "original_TripDate": "2026-10-23",
+      "new_trip_date": "2026-11-12",
+      "Trip Date": "2026-10-23 00:00:00.000 -> 2026-11-12 00:00:00.000",
+      "Pickup Time": "2026-10-23 07:55:00.000 -> 2026-11-12 07:55:00.000",
+      "Vendor ID": "82475202610230755 -> 82475202611120755",
+      "Leg ID": "82475202610230755A -> 82475202611120755A"
+    },
+    "blocked_when": [
+      "MULTIPLE_TRIP_DATES"
+    ]
+  },
+  "normalization": {
+    "trim_strings": true,
+    "collapse_whitespace_fields": [
+      "Client Name",
+      "PUAddress",
+      "PUCity",
+      "DOAddress",
+      "DOCity",
+      "PickUpLocationName",
+      "DropLocationName",
+      "Comments"
+    ],
+    "preserve_original_values": true,
+    "destination_datetime_format": "YYYY-MM-DD HH:mm:ss.SSS",
+    "uppercase_for_matching_only": true,
+    "id_date_format": "YYYYMMDD",
+    "id_time_format": "HHMM",
+    "id_component_cleanup": "Remove every character outside A-Z, a-z, and 0-9 from each component before concatenation.",
+    "preserve_leading_zeroes": [
+      "Client ID",
+      "ZIP codes",
+      "HHMM"
+    ],
+    "identity_component_policy": "The same AlnumClientID normalization is used by Vendor ID, Leg ID, Tobi MRN, pairing groups, and passenger-catalog key comparisons. For companions, remove one trailing legacy PCA, _PCA, or -PCA before applying the canonical PCA suffix."
+  },
+  "exact_duplicate_rule": {
+    "definition": "Every normalized Source column is identical.",
+    "action": "retain first and remove later exact copies",
+    "code": "EXACT_DUPLICATE_REMOVED",
+    "do_not_use_as_duplicate_key": [
+      "Vendor ID",
+      "Leg ID",
+      "Pair Status"
+    ]
+  },
+  "passenger_types": {
+    "CLI": {
+      "meaning": "Client",
+      "classification": "client"
+    },
+    "PCA": {
+      "meaning": "Personal Care Assistant",
+      "classification": "companion"
+    },
+    "COM": {
+      "meaning": "Companion",
+      "classification": "companion"
+    },
+    "COMP": {
+      "meaning": "Companion",
+      "classification": "companion"
+    }
+  },
+  "passenger_types_unknown": {
+    "action": "route_to invalid_trips",
+    "exception": "UNKNOWN_PASSENGER_TYPE",
+    "status": "confirmed 2026-11-09",
+    "description": "Rows whose Passenger Ty is not CLI, PCA, COM or COMP receive no Vendor ID or Leg ID and are written to Invalid Trips with Validation Status EXCEPTION."
+  },
+  "companion_definition": {
+    "rule_id": "COMPANION-DETECTION-001",
+    "source_column": "Passenger Ty",
+    "normalized_values": [
+      "PCA",
+      "COM",
+      "COMP"
+    ],
+    "canonical_suffix": "PCA"
+  },
+  "id_policy": {
+    "rule_id": "ID-POLICY-001",
+    "allowed_regex": "^[A-Za-z0-9]+$",
+    "special_characters_allowed": false,
+    "separator": "",
+    "generated_suffix_case": "uppercase",
+    "on_missing_component": "ROUTE_TO_INVALID_TRIPS (MISSING_ID_COMPONENT); does not block the export (decision 2026-11-10)",
+    "on_collision": "ERROR_AND_BLOCK_EXPORT",
+    "idempotent": true
+  },
+  "field_rules": {
+    "client_name": {
+      "source": "Client Name",
+      "split_at_first": ",",
+      "targets": {
+        "left": "Last Name",
+        "right": "First Name",
+        "Middle Name": ""
+      },
+      "no_comma": "keep the full value in Last Name",
+      "companion_suffixes": {
+        "rule_ids": [
+          "COMPANION-LASTNAME-001"
+        ],
+        "when_passenger_type_in": [
+          "PCA",
+          "COM",
+          "COMP"
+        ],
+        "First Name": "Preserve normalized First Name; do not append PCA.",
+        "Last Name": " COMPANION",
+        "apply_after_split": true,
+        "exactly_once": true
+      },
+      "examples": [
+        {
+          "Client Name": "ALLOUCHE,DEANNE",
+          "Passenger Ty": "PCA",
+          "Last Name": "ALLOUCHE COMPANION",
+          "First Name": "DEANNE"
+        },
+        {
+          "Client Name": "ALLOUCHE COMPANION,DEANNE - PCA",
+          "Passenger Ty": "PCA",
+          "Last Name": "ALLOUCHE COMPANION",
+          "First Name": "DEANNE"
+        }
+      ],
+      "catalog_override": "For existing passengers, use catalog values after applying CATALOG-PCA-FIRSTNAME-MIGRATION-001 to legacy companion First Name values.",
+      "legacy_first_name_cleanup": {
+        "rule_id": "COMPANION-FIRSTNAME-CLEANUP-001",
+        "when": "Passenger is companion or catalog MRN canonicalizes to a value ending in PCA",
+        "action": "Remove one trailing suffix matching optional spaces + hyphen + optional spaces + PCA, case-insensitive.",
+        "regex": "\\s*-\\s*PCA\\s*$",
+        "replacement": "",
+        "do_not_remove": "PCA text that is not the trailing legacy suffix"
+      }
+    },
+    "tobi_mrn": {
+      "rule_id": "MRN-PCA-001",
+      "source": "Client ID",
+      "target": "Tobi MRN",
+      "client_format": "{AlnumClientID}",
+      "companion_format": "{AlnumClientID}PCA",
+      "idempotency": "For companions, a trailing PCA (or legacy _PCA / -PCA) in Client ID is removed before adding PCA, so PCA is never duplicated.",
+      "never_generate": [
+        "_PCA",
+        "-PCA"
+      ],
+      "examples": [
+        {
+          "Client ID": "82475",
+          "Passenger Ty": "PCA",
+          "Tobi MRN": "82475PCA"
+        },
+        {
+          "Client ID": "82475PCA",
+          "Passenger Ty": "PCA",
+          "Tobi MRN": "82475PCA"
+        },
+        {
+          "Client ID": "82-475",
+          "Passenger Ty": "CLI",
+          "Tobi MRN": "82475"
+        }
+      ]
+    },
+    "pickup_address": {
+      "source": "PUAddress",
+      "targets": {
+        "street": "Pickup Address",
+        "secondary": "Pickup Suite",
+        "PUCity": "Pickup City",
+        "PUZipcode": "Pickup Zip"
+      },
+      "constant": {
+        "Pickup State": "CA"
+      },
+      "secondary_indicators": [
+        "APT",
+        "APARTMENT",
+        "STE",
+        "SUITE",
+        "UNIT",
+        "SP",
+        "SPC",
+        "SPACE",
+        "#",
+        "standalone trailing unit"
+      ],
+      "kept_from": "v1.4.0 (decision 2026-11-10)"
+    },
+    "dropoff_address": {
+      "source": "DOAddress",
+      "targets": {
+        "street": "Dropoff Address",
+        "secondary": "Dropoff Suite",
+        "DOCity": "Dropoff City",
+        "DOZipcode": "Dropoff Zip"
+      },
+      "constant": {
+        "Dropoff State": "CA"
+      },
+      "secondary_indicators": [
+        "APT",
+        "APARTMENT",
+        "STE",
+        "SUITE",
+        "UNIT",
+        "SP",
+        "SPC",
+        "SPACE",
+        "#",
+        "standalone trailing unit"
+      ],
+      "kept_from": "v1.4.0 (decision 2026-11-10)"
+    },
+    "dates_and_times": {
+      "TripDate": "Trip Date",
+      "TripDate+PUTime": "Pickup Time",
+      "TripDate+DOAppt": "Dropoff Time",
+      "format": "YYYY-MM-DD HH:mm:ss.SSS",
+      "date_source": "effective trip date (see trip_date_override)",
+      "TripDate+DOAppt_when_DOAppt_empty": "empty",
+      "kept_from": "v1.4.0 (decision 2026-11-10)"
+    },
+    "mode": {
+      "target": "Mode",
+      "default": "Ambulette",
+      "type": "text",
+      "apply_to": "every valid row"
+    },
+    "service_area": {
+      "target": "Service Area",
+      "default": "NCTD Service Area",
+      "type": "text",
+      "apply_to": "every valid row"
+    },
+    "booking_fare": {
+      "source": "Amount",
+      "target": "Booking Fare",
+      "type": "number",
+      "rule": "If parsed numeric value is greater than 0 use it; otherwise use 0.",
+      "default": 0,
+      "minimum": 0,
+      "remove_currency_symbols": true
+    },
+    "phones": {
+      "source": "Comments",
+      "normalization": "digits only",
+      "valid_phone": "10-digit US number; allow common separators, parentheses, labels, spacing, optional country code 1",
+      "Primary Phone": {
+        "use": "first valid",
+        "default": "9876543210",
+        "catalog_override": "For passengers in the passenger catalog, Primary Phone is the catalog Telephone (CATALOG-001)."
+      },
+      "Secondary Phone": {
+        "use": "second valid",
+        "default": ""
+      },
+      "maximum": 2,
+      "kept_from": "v1.4.0 (decision 2026-11-10)"
+    },
+    "pickup_gate_code": {
+      "source": "Comments",
+      "target": "Pickup Gate Code",
+      "detect": "GATE CODE followed by code",
+      "strip_leading_characters": [
+        "#",
+        ":",
+        "-"
+      ],
+      "example": {
+        "Comments": "GATE CODE #7444",
+        "Pickup Gate Code": "7444"
+      },
+      "status": "confirmed 2026-11-09",
+      "kept_from": "v1.4.0 (decision 2026-11-10)"
+    },
+    "tobi_tags": {
+      "target": "Tobi Tags",
+      "delimiter": ", ",
+      "deduplicate": true,
+      "rules": [
+        {
+          "rule_id": "TAG-CBLA-001",
+          "value": "CBLA",
+          "phrases": [
+            "CANNOT BE LEFT ALONE",
+            "CAN NOT BE LEFT ALONE",
+            "CBLA",
+            "DO NOT LEAVE ALONE",
+            "DO NOT LEAVE UNATTENDED"
+          ],
+          "value_note": "v2.0 proposed \"Cannot Be Left Alone\"; changed to CBLA on 2026-11-10."
+        },
+        {
+          "rule_id": "TAG-VI-001",
+          "value": "Visually Impaired",
+          "phrases": [
+            "VISUALLY IMPAIRED",
+            "VISIUALLY IMPAIRED",
+            "VISUAL IMPAIRMENT",
+            "LEGALLY BLIND",
+            "BLIND",
+            "ONE EYE BLIND",
+            "1 EYE BLIND"
+          ]
+        }
+      ],
+      "source_columns": [
+        "Comments",
+        "Assisted",
+        "PickUpLocationName",
+        "DropLocationName"
+      ],
+      "phrase_policy": "Union of v1.4.0 and v2.0 phrases (decision 2026-11-10).",
+      "order": "CBLA before Visually Impaired"
+    },
+    "booking_notes": {
+      "source": "Comments",
+      "target": "Booking Notes",
+      "delimiter": ", ",
+      "deduplicate": true,
+      "append_rules": [
+        {
+          "when": {
+            "Space Type": "LR"
+          },
+          "value": "Lift Required"
+        }
+      ]
+    },
+    "trip_purpose": {
+      "sources": [
+        "PickUpLocationName",
+        "DropLocationName"
+      ],
+      "mapping": {
+        "ALZHEIMERS": "Glenner",
+        "DIALYSIS": "Dialysis",
+        "BEACONS": "Day Center",
+        "LIFE OF LIBERTY": "Day Center",
+        "STEPPING STONE ADULT DAYCARE": "Day Center"
+      },
+      "default": "Appointment",
+      "kept_from": "v1.4.0 (decision 2026-11-10)"
+    },
+    "leg_notes": {
+      "target": "Leg Notes",
+      "delimiter": " | ",
+      "omit_blank": true,
+      "parts": [
+        {
+          "source": "PickUpLocationName",
+          "prefix": "PULN: "
+        },
+        {
+          "source": "DropLocationName",
+          "prefix": "DOLN: "
+        }
+      ],
+      "kept_from": "v1.4.0 (decision 2026-11-10)"
+    },
+    "space_type": {
+      "source": "Space Type",
+      "targets": [
+        "Seating Need",
+        "Service Type"
+      ],
+      "mapping": {
+        "AM": "Ambulatory",
+        "LR": "Ambulatory",
+        "SC": "Bariatric Wheelchair",
+        "WH": "Wheelchair",
+        "XW": "Bariatric Wheelchair"
+      },
+      "default": "Ambulatory",
+      "LR_booking_note": "Lift Required"
+    }
+  },
+  "passenger_catalog": {
+    "rule_id": "CATALOG-001",
+    "purpose": "Avoid aliases in TOBI while enforcing the v2.3.0 companion naming convention: unchanged First Name and Last Name ending in COMPANION.",
+    "source_of_truth": "First come, first kept. NCTD provides no full passenger dump or API, so the catalog is built from the daily manifests; the first values received for a passenger become the truth.",
+    "storage": {
+      "current": "CSV file. The user uploads the previous day's NCTD_Passengers_<YYYYMMDD>_UPDTD.csv every day.",
+      "future": "Move to persistent storage when available."
+    },
+    "columns": [
+      "First Name",
+      "Last Name",
+      "MRN Number",
+      "Telephone"
+    ],
+    "key": {
+      "catalog_column": "MRN Number",
+      "output_column": "Tobi MRN",
+      "comparison": "Letters and digits only, case-insensitive (legacy 82475_PCA matches 82475PCA).",
+      "canonicalization": "Remove non-alphanumeric characters, compare case-insensitively, and normalize one trailing companion suffix to PCA."
+    },
+    "locked_fields": {
+      "First Name": "First Name",
+      "Last Name": "Last Name",
+      "Tobi MRN": "MRN Number",
+      "Primary Phone": "Telephone"
+    },
+    "existing_passenger": "Output takes First Name, Last Name and Primary Phone from the catalog after legacy companion-name migration. A companion First Name ending in legacy \" - PCA\" is normalized by removing that suffix; Last Name ends in \" COMPANION\" exactly once.",
+    "new_passenger": {
+      "action": "Build values with field_rules and append one catalog row. Companion First Name is unchanged, Last Name ends in COMPANION, MRN Number equals canonical Tobi MRN, and Telephone equals Primary Phone.",
+      "phone_default": "9876543210 is stored when no valid phone is found; it is not replaced later."
+    },
+    "same_file": "If a new passenger appears in several rows of the same Viajes file, the first normalized source row defines catalog values. Companion First Name never receives a PCA suffix.",
+    "companions": "PCA, COM and COMP have separate catalog rows keyed by canonical Tobi MRN (for example: First Name DEANNE, Last Name ALLOUCHE COMPANION, MRN Number 82475PCA).",
+    "duplicate_mrn_in_catalog": {
+      "action": "The first row wins; later rows are kept in the file but ignored.",
+      "code": "CATALOG_DUPLICATE_MRN"
+    },
+    "invalid_catalog_phone": {
+      "action": "The catalog value is used as is (digits only) and reported.",
+      "code": "CATALOG_PHONE_INVALID"
+    },
+    "missing_catalog": {
+      "action": "Process anyway; every passenger is treated as new and a warning is shown, because values could differ from an earlier catalog.",
+      "code": "NO_PASSENGER_CATALOG"
+    },
+    "output_file": "NCTD_Passengers_<YYYYMMDD>_UPDTD.csv: uploaded rows in original order after v2.3.0 companion-name migration, followed by new passengers in source row order.",
+    "not_locked": [
+      "Secondary Phone (still taken from Comments)"
+    ],
+    "migration_rules": [
+      {
+        "rule_id": "CATALOG-PCA-FIRSTNAME-MIGRATION-001",
+        "scope": "Catalog rows whose canonical MRN Number ends with PCA",
+        "field": "First Name",
+        "match_regex": "\\s*-\\s*PCA\\s*$",
+        "case_sensitive": false,
+        "action": "Remove exactly one matching trailing legacy suffix and trim the result.",
+        "last_name_action": "Append COMPANION exactly once when absent.",
+        "mrn_action": "Preserve canonical alphanumeric MRN Number ending in PCA.",
+        "idempotent": true
+      }
+    ]
+  },
+  "pairing": {
+    "rule_id": "PAIRING-001",
+    "group_by": [
+      "AlnumClientID",
+      "effective trip date",
+      "CompanionStatus"
+    ],
+    "primary_match": "Pickup street, suite, city and ZIP of one row equal the dropoff street, suite, city and ZIP of the other row, and vice versa (no fuzzy matching).",
+    "assignment": "Within each reciprocal pair, earlier PUTime is A and later PUTime is B. The order of source rows does not matter.",
+    "candidate_window": "A return is a candidate for an outbound row when it starts later and no other row with the outbound route starts in between; the same applies in reverse. This keeps two round trips on the same day unambiguous.",
+    "unpaired": {
+      "Leg letter": "A",
+      "Pair Status": "Unpaired"
+    },
+    "paired": {
+      "Pair Status": "Paired"
+    },
+    "ambiguous": {
+      "when": "a row has more than one candidate partner",
+      "code": "AMBIGUOUS_PAIRING",
+      "response": "ERROR_AND_BLOCK_EXPORT",
+      "Pair Status": "Ambiguous (preview only)"
+    },
+    "synthetic_B": false
+  },
+  "identifiers": {
+    "vendor_id": {
+      "rule_id": "VENDOR-ID-001",
+      "target": "Vendor ID",
+      "client_format": "{AlnumClientID}{YYYYMMDD}{HHMM}",
+      "companion_format": "{AlnumClientID}{YYYYMMDD}{HHMM}PCA",
+      "uniqueness_scope": "entire output file",
+      "collision_code": "VENDOR_ID_COLLISION"
+    },
+    "leg_id": {
+      "rule_id": "LEG-ID-001",
+      "target": "Leg ID",
+      "client_format": "{AlnumClientID}{YYYYMMDD}{HHMM}{LegLetter}",
+      "companion_format": "{AlnumClientID}{YYYYMMDD}{HHMM}PCA{LegLetter}",
+      "examples": {
+        "cli_a": "82475202610230755A",
+        "cli_b": "82475202610231530B",
+        "pca_a": "82475202610230755PCAA",
+        "pca_b": "82475202610231530PCAB"
+      },
+      "uniqueness_scope": "entire output file",
+      "collision_code": "LEG_ID_COLLISION",
+      "note": "Each leg uses its own pickup time; legs A and B of a pair do not share an identifier. To be confirmed with the TOBI test import (risk 4.3 of the v2.0 specification)."
+    },
+    "components": {
+      "AlnumClientID": "Client ID with every character outside A-Z, a-z, 0-9 removed. For companion rows, remove one trailing PCA, _PCA, or -PCA before composing the canonical PCA suffix.",
+      "YYYYMMDD": "effective trip date",
+      "HHMM": "PUTime hours and minutes; seconds are dropped (two trips in the same minute collide)"
+    }
+  },
+  "collision_controls": [
+    {
+      "rule_id": "VENDOR-ID-COLLISION-001",
+      "key": "Vendor ID",
+      "detection": "After exact-deduplication, group by generated Vendor ID; any count > 1 is a collision.",
+      "likely_causes": [
+        "same client/date/pickup time for two distinct CLI trips",
+        "invalid or truncated Client ID",
+        "time rounded to minutes",
+        "companion type not normalized"
+      ],
+      "response": "ERROR_AND_BLOCK_EXPORT",
+      "resolution": "Correct source data or obtain a TOBI-approved additional alphanumeric discriminator. Never silently append a counter."
+    },
+    {
+      "rule_id": "LEG-ID-COLLISION-001",
+      "key": "Leg ID",
+      "detection": "After pairing and ID generation, group by generated Leg ID; any count > 1 is a collision.",
+      "likely_causes": [
+        "same client/date/time/type and same A/B assignment",
+        "duplicate not exact because a non-key field differs",
+        "ambiguous pairing"
+      ],
+      "response": "ERROR_AND_BLOCK_EXPORT",
+      "resolution": "Review the pair and source data. Do not auto-renumber unless TOBI approves a discriminator."
+    },
+    {
+      "rule_id": "PAIR-CARDINALITY-001",
+      "detection": "A reciprocal pair contains more than one A or more than one B.",
+      "response": "ERROR_AND_BLOCK_EXPORT"
+    }
+  ],
+  "validations": [
+    {
+      "validation_id": "VAL-001",
+      "assertion": "Every Vendor ID matches ^[A-Za-z0-9]+$ and is nonblank.",
+      "severity": "ERROR"
+    },
+    {
+      "validation_id": "VAL-002",
+      "assertion": "Every Leg ID matches ^[A-Za-z0-9]+$ and is nonblank.",
+      "severity": "ERROR"
+    },
+    {
+      "validation_id": "VAL-003",
+      "assertion": "Vendor ID is unique across the output after exact deduplication.",
+      "severity": "ERROR"
+    },
+    {
+      "validation_id": "VAL-004",
+      "assertion": "Leg ID is unique across the output after exact deduplication.",
+      "severity": "ERROR"
+    },
+    {
+      "validation_id": "VAL-005",
+      "assertion": "Companion IDs end in PCA or PCAA/PCAB as applicable and never include _ or -.",
+      "severity": "ERROR"
+    },
+    {
+      "validation_id": "VAL-006",
+      "assertion": "Reprocessing produces identical IDs and does not append companion suffixes twice.",
+      "severity": "ERROR"
+    },
+    {
+      "validation_id": "VAL-007",
+      "assertion": "Pairing assigns A to the earlier pickup and B to the later pickup within an identified reciprocal pair.",
+      "severity": "ERROR"
+    },
+    {
+      "validation_id": "VAL-008",
+      "assertion": "Ambiguous pairing and key collisions block ready-for-import status.",
+      "severity": "ERROR"
+    },
+    {
+      "validation_id": "VAL-009",
+      "assertion": "Companion First Name does not end with a legacy - PCA suffix; companion Last Name ends with COMPANION exactly once.",
+      "severity": "ERROR"
+    },
+    {
+      "validation_id": "VAL-010",
+      "assertion": "Removing the visible First Name suffix does not alter PCA in Tobi MRN, Vendor ID or Leg ID.",
+      "severity": "ERROR"
+    }
+  ],
+  "exceptions": {
+    "EXACT_DUPLICATE_REMOVED": "info",
+    "UNKNOWN_SPACE_TYPE": "info",
+    "NONRECIPROCAL_ROUTE": "warning",
+    "UNKNOWN_PASSENGER_TYPE": "error",
+    "MISSING_ID_COMPONENT": "error",
+    "MULTIPLE_TRIP_DATES": "error",
+    "AMBIGUOUS_PAIRING": "blocking",
+    "VENDOR_ID_COLLISION": "blocking",
+    "LEG_ID_COLLISION": "blocking",
+    "INVALID_VENDOR_ID": "blocking",
+    "INVALID_LEG_ID": "blocking",
+    "NO_PASSENGER_CATALOG": "warning",
+    "CATALOG_PHONE_INVALID": "warning",
+    "CATALOG_DUPLICATE_MRN": "info"
+  },
+  "exception_severity_meaning": {
+    "info": "summary only",
+    "warning": "row stays in Output; shown in the summary",
+    "error": "row goes to Invalid Trips; export continues",
+    "blocking": "Output is not produced until the source is corrected"
+  },
+  "validation_patterns": {
+    "Vendor ID": "^[A-Za-z0-9]+$",
+    "Leg ID": "^[A-Za-z0-9]+$",
+    "Primary Phone": "^[0-9]{10}$",
+    "Booking Fare minimum": 0
+  },
+  "deprecated": [
+    "Sequential 10-digit Trip ID for TOBI export",
+    "Journey ID for TOBI export",
+    "Leg_ID_A column",
+    "Leg_ID_B column",
+    "_A and _B suffixes",
+    "-A and -B suffixes",
+    "_PCA and -PCA in ID fields",
+    "Leg ID format without pickup time",
+    "Leg_ID_A/Leg_ID_B rules of document v1.3 (2026-11-10)",
+    "Journey ID registry and 72-hour fingerprints",
+    "ASSISTANT_WITHOUT_CLIENT, MULTIPLE_CLIENTS_SAME_LEG, MULTIPLE_ASSISTANTS_SAME_LEG, MULTIPLE_RETURN_LEGS, MORE_THAN_TWO_LEGS, INVALID_LEG_SEQUENCE, LEG_B_BEFORE_LEG_A, JOURNEY_ASSIGNMENT_AMBIGUOUS, INVALID_JOURNEY_ID",
+    "Visible First Name suffix \" - PCA\" for companions"
+  ],
+  "acceptance_tests": [
+    {
+      "id": "AT-01",
+      "case": "Single CLI single Leg",
+      "expected": "Leg A and valid IDs"
+    },
+    {
+      "id": "AT-02",
+      "case": "CLI plus PCA same Leg",
+      "expected": "Separate Vendor ID and Leg ID; companion Tobi MRN ends with PCA; First Name unchanged; Last Name ends with COMPANION."
+    },
+    {
+      "id": "AT-03",
+      "case": "Reciprocal two-Leg pair",
+      "expected": "Earlier pickup A, later pickup B; both Pair Status Paired"
+    },
+    {
+      "id": "AT-04",
+      "case": "Round trip with assistant",
+      "expected": "Client and assistant are paired separately; each gets its own A and B"
+    },
+    {
+      "id": "AT-05",
+      "case": "Two reciprocal round trips for the same client on the same date",
+      "expected": "The candidate-window rule creates two independent A/B pairs; every Vendor ID and Leg ID is unique because HHMM is included."
+    },
+    {
+      "id": "AT-06",
+      "case": "Exact duplicate",
+      "expected": "Remove later copy only"
+    },
+    {
+      "id": "AT-07",
+      "case": "Required field contains Empty",
+      "expected": "Route original row to Invalid Trips and assign no IDs"
+    },
+    {
+      "id": "AT-08",
+      "case": "No valid phone",
+      "expected": {
+        "Primary Phone": "9876543210"
+      }
+    },
+    {
+      "id": "AT-09",
+      "case": "Amount blank zero negative or invalid",
+      "expected": {
+        "Booking Fare": 0
+      }
+    },
+    {
+      "id": "AT-10",
+      "case": "Default mode",
+      "expected": {
+        "Mode": "Ambulette"
+      }
+    },
+    {
+      "id": "AT-11",
+      "case": "Default service area",
+      "expected": {
+        "Service Area": "NCTD Service Area"
+      }
+    },
+    {
+      "id": "AT-12",
+      "case": "ANGUIANO misspelling",
+      "input": "VISIUALLY IMPAIRED",
+      "expected": {
+        "Tobi Tags": "Visually Impaired"
+      }
+    },
+    {
+      "id": "AT-13",
+      "case": "Companion reciprocal pair with alphanumeric-only identifier policy",
+      "expected": {
+        "leg_a_suffix": "PCAA",
+        "leg_b_suffix": "PCAB",
+        "id_pattern": "^[A-Za-z0-9]+$",
+        "special_characters": false
+      }
+    },
+    {
+      "id": "AT-14",
+      "case": "Trip date changed from 2026-10-23 to 2026-11-12",
+      "expected": "Trip Date, Pickup Time and Dropoff Time use 2026-11-12; times unchanged"
+    },
+    {
+      "id": "AT-15",
+      "case": "Trip date changed to 2026-11-12",
+      "expected": "Vendor ID and Leg ID contain 20261112"
+    },
+    {
+      "id": "AT-16",
+      "case": "Trip date changed and a row has an invalid TripDate",
+      "expected": "That row keeps its original values in Invalid Trips and gets no IDs"
+    },
+    {
+      "id": "AT-17",
+      "case": "Source file with more than one TripDate",
+      "expected_exception": "MULTIPLE_TRIP_DATES; date change blocked"
+    },
+    {
+      "id": "AT-18",
+      "case": "Trip date changed; Source name NCTD_Trips_10.23.26_1.xlsx; new date 2026-11-12",
+      "expected": {
+        "destination": "NCTD_Trips_11.12.26_1_TOBI.csv",
+        "invalid_trips": "NCTD_Trips_11.12.26_1_INVALID_TRIPS.csv"
+      }
+    },
+    {
+      "id": "AT-19",
+      "case": "Trip date changed; Source name without the original date (Manifest.xlsx)",
+      "expected": {
+        "destination": "Manifest_11.12.26_TOBI.csv"
+      }
+    },
+    {
+      "id": "AT-20",
+      "case": "Trip date not changed",
+      "expected": {
+        "destination": "NCTD_Trips_10.23.26_1_TOBI.csv"
+      }
+    },
+    {
+      "id": "AT-21",
+      "case": "Passenger already in the catalog; manifest brings another phone and a differently written name",
+      "expected": "First Name, Last Name and Primary Phone come from the catalog; catalog unchanged"
+    },
+    {
+      "id": "AT-22",
+      "case": "New passenger with a phone in Comments",
+      "expected": "Row appended to the catalog with that phone"
+    },
+    {
+      "id": "AT-23",
+      "case": "New passenger without a phone",
+      "expected": "Catalog row with Telephone 9876543210"
+    },
+    {
+      "id": "AT-24",
+      "case": "New passenger in two rows of the same file, phone only in the second row",
+      "expected": "Both rows use the values of the first row (9876543210); one catalog row"
+    },
+    {
+      "id": "AT-25",
+      "case": "New companion passenger",
+      "expected": "Own catalog row: First Name DEANNE, Last Name ALLOUCHE COMPANION, MRN Number 82475PCA; no First Name PCA suffix."
+    },
+    {
+      "id": "AT-26",
+      "case": "Catalog has legacy MRN 82475_PCA",
+      "expected": "Matches Tobi MRN 82475PCA"
+    },
+    {
+      "id": "AT-27",
+      "case": "No Pasajeros file uploaded",
+      "expected": "NO_PASSENGER_CATALOG warning; all passengers new"
+    },
+    {
+      "id": "AT-28",
+      "case": "Pasajeros uploaded as NCTD_Passengers.csv, processed on 2026-11-10 in Mexico City",
+      "expected": {
+        "pasajeros_updated": "NCTD_Passengers_20261110_UPDTD.csv"
+      }
+    },
+    {
+      "id": "AT-29",
+      "case": "Processed at 2026-11-11 00:30 UTC (2026-11-10 18:30 in Mexico City)",
+      "expected": {
+        "pasajeros_updated": "NCTD_Passengers_20261110_UPDTD.csv"
+      }
+    },
+    {
+      "id": "AT-30",
+      "case": "Any output file",
+      "expected": "Extension .csv in lowercase"
+    },
+    {
+      "id": "AT-31",
+      "case": "New PCA, COM or COMP with Client Name ALLOUCHE,DEANNE",
+      "expected": {
+        "First Name": "DEANNE",
+        "Last Name": "ALLOUCHE COMPANION",
+        "Tobi MRN": "82475PCA"
+      }
+    },
+    {
+      "id": "AT-32",
+      "case": "Existing companion catalog row with First Name DEANNE - PCA",
+      "expected": "Catalog and Output use First Name DEANNE; other identity values remain unchanged."
+    },
+    {
+      "id": "AT-33",
+      "case": "Reprocess an already migrated companion catalog",
+      "expected": "First Name and Last Name remain unchanged; no repeated COMPANION and no PCA is appended to First Name."
+    }
+  ],
+  "acceptance_test_suite": {
+    "deviations": {
+      "TC-012": "Missing Client ID goes to Invalid Trips with MISSING_ID_COMPONENT; export is not blocked (decision 2026-11-10)",
+      "TC-013": "Missing PUTime goes to Invalid Trips with MISSING_ID_COMPONENT; export is not blocked (decision 2026-11-10)",
+      "TC-017": "Tobi Tags value is CBLA instead of Cannot Be Left Alone (decision 2026-11-10)",
+      "TC-003": "Expected First Name is DEANNE, not DEANNE - PCA.",
+      "TC-015": "Legacy First Name ending in - PCA is migrated to the base First Name."
+    },
+    "expected_overrides": {
+      "TC-003": {
+        "First Name": "DEANNE"
+      },
+      "TC-015": {
+        "First Name": "DEANNE"
+      },
+      "TC-017": {
+        "Tobi Tags": "CBLA, Visually Impaired"
+      }
+    },
+    "rules_version": "2.3.0",
+    "baseline_file": "NCTD_Manifest_Parser_Test_Cases_v2.0.json",
+    "baseline_cases": "TC-001 to TC-028",
+    "embedded_acceptance_cases": "AT-01 to AT-33"
+  },
+  "nodejs_implementation": {
+    "recommended_modules": [
+      "ingestion",
+      "validation",
+      "normalization",
+      "deduplication",
+      "passenger-classification",
+      "reciprocal-leg-pairing",
+      "identifier-service",
+      "field-mapping",
+      "exception-service",
+      "csv-export",
+      "processing-summary"
+    ],
+    "recommended_types": [
+      "SourceManifestRow",
+      "NormalizedManifestRow",
+      "InvalidTripRow",
+      "LogicalLeg",
+      "ReciprocalLegPair",
+      "DestinationRow",
+      "ParseException",
+      "ProcessingSummary"
+    ],
+    "concurrency": [
+      "deterministic identifiers; no shared sequence",
+      "idempotent retries"
+    ],
+    "security": [
+      "minimize PII in logs",
+      "encrypt in transit and at rest",
+      "role-based authorization",
+      "configurable retention"
+    ]
+  },
+  "consistency_contract": {
+    "active_identifier_fields": [
+      "Vendor ID",
+      "Leg ID",
+      "Tobi MRN"
+    ],
+    "active_pairing_fields": [
+      "Pair Status"
+    ],
+    "forbidden_active_concepts": [
+      "Journey ID",
+      "Journey sequence",
+      "Leg_ID_A",
+      "Leg_ID_B",
+      "Leg Group Key"
+    ],
+    "allowed_deprecated_mentions": true,
+    "catalog_headers": [
+      "First Name",
+      "Last Name",
+      "MRN Number",
+      "Telephone"
+    ],
+    "destination_phone_header": "Primary Phone",
+    "catalog_to_destination_phone_mapping": "Telephone -> Primary Phone",
+    "acceptance_test_id_range": "AT-01..AT-33 with no gaps",
+    "output_extension": ".csv",
+    "companion_visible_name_policy": {
+      "First Name": "No generated PCA suffix",
+      "Last Name": "Ends with COMPANION exactly once"
+    },
+    "technical_pca_suffix_fields": [
+      "Tobi MRN",
+      "Vendor ID",
+      "Leg ID"
+    ],
+    "forbidden_active_first_name_suffixes": [
+      " - PCA",
+      "-PCA",
+      "_PCA"
+    ]
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "specification": {
+    "id": "nctd-manifest-parser",
+    "name": "NCTD Manifest Parser",
+    "organization": "North County Transit District",
+    "version": "2.8.0",
+    "status": "candidate_for_local_and_tobi_stage_validation",
+    "target_runtime": "Node.js",
+    "updated": "2026-11-15",
+    "extends": {
+      "file": "nctd_manifest_parser_rules_v2.7.1.json",
+      "version": "2.7.1",
+      "merge_strategy": "deep_merge_by_key",
+      "rule": "All v2.7.1 rules remain active. This version only adds the optional consecutive numbering of Leg ID V2."
+    },
+    "description": "v2.8.0 overlay: optional consecutive Leg ID V2 values L000001, L000002, ... for every Output row, starting at a number entered by the user.",
+    "changelog": [
+      {
+        "version": "2.8.0",
+        "date": "2026-11-15",
+        "changes": [
+          "Added LEG-ID-V2-SEQUENTIAL-001: checkbox \"Asignar números consecutivos a Leg ID V2\", off by default. When on, Leg ID V2 = L + six-digit consecutive number, in Output row order.",
+          "The user enters the start number (field \"Iniciar en\", default 1) to continue the previous file's numbering, so numbers do not repeat across days (decision 2026-11-15).",
+          "When the option is on, the Leg ID V2 formula (CLI -> Leg ID, PCA/COM/COMP -> Vendor ID), the invariant \"Do not append a counter or random value\" and VAL-013/VAL-014 do not apply to Leg ID V2. Vendor ID, Leg ID, Tobi MRN, Pair Status and the catalog do not change.",
+          "Added LEG_ID_V2_SEQUENCE_OVERFLOW (blocking) and VAL-016.",
+          "Added acceptance tests AT-54 to AT-58."
+        ]
+      }
+    ]
+  },
+  "experimental_rules": {
+    "leg_id_v2": {
+      "sequential_option": {
+        "rule_id": "LEG-ID-V2-SEQUENTIAL-001",
+        "label": {
+          "es": "Asignar números consecutivos a Leg ID V2",
+          "en": "Assign consecutive numbers to Leg ID V2"
+        },
+        "enabled_by_default": false,
+        "format": {
+          "prefix": "L",
+          "digits": 6,
+          "pattern": "^L[0-9]{6}$",
+          "examples": [
+            "L000001",
+            "L000002",
+            "L000003"
+          ]
+        },
+        "start": {
+          "input_label": {
+            "es": "Iniciar en",
+            "en": "Start at"
+          },
+          "default": 1,
+          "minimum": 1,
+          "maximum": 999999,
+          "type": "integer",
+          "continuity": "To avoid repeating identifiers in TOBI across files, enter the last number of the previous file + 1. The summary shows the next start number. Planned: remember it in the passenger database."
+        },
+        "order": "Output row order (the same order as the Output file and the Section 2 grid).",
+        "scope": "Every valid Output row after exact deduplication, Vendor ID, Leg ID and the standard Leg ID V2 formula; the consecutive value replaces Leg ID V2.",
+        "independent_of": "TOBI_INDEPENDENT_LEGS_V2 mode: the numbering can be used with the experimental mode on or off; the Leg ID V2 checks keep their severity rules.",
+        "overrides_when_enabled": [
+          "experimental_rules.leg_id_v2.rules (CLI -> Leg ID, PCA/COM/COMP -> Vendor ID)",
+          "invariant: Do not append a counter or random value (Leg ID V2 only)",
+          "VAL-013",
+          "VAL-014"
+        ],
+        "unchanged": [
+          "Vendor ID",
+          "Leg ID",
+          "Tobi MRN",
+          "Pair Status",
+          "PAIRING-001",
+          "Booking Fare",
+          "passenger catalog"
+        ],
+        "determinism": "The same Source file, catalog, options and start number give the same values. Adding, removing or reordering rows changes the numbers of the rows that follow.",
+        "overflow": {
+          "when": "start + number of Output rows - 1 > 999999",
+          "code": "LEG_ID_V2_SEQUENCE_OVERFLOW",
+          "action": "Do not produce the Output file."
+        },
+        "invalid_start": "A start number that is not a whole number from 1 to 999999 is rejected before processing.",
+        "decided_by": "Majo, 2026-11-15"
+      }
+    }
+  },
+  "exceptions_patch": {
+    "LEG_ID_V2_SEQUENCE_OVERFLOW": "blocking"
+  },
+  "validations_patch": [
+    {
+      "validation_id": "VAL-016",
+      "assertion": "With LEG-ID-V2-SEQUENTIAL-001 on, every Leg ID V2 matches ^L[0-9]{6}$, the first equals the start number and each following row adds 1, in Output row order.",
+      "severity": "ERROR"
+    }
+  ],
+  "acceptance_tests_patch": [
+    {
+      "id": "AT-54",
+      "case": "Consecutive option on, start 1, three Output rows",
+      "expected": {
+        "Leg ID V2": [
+          "L000001",
+          "L000002",
+          "L000003"
+        ]
+      }
+    },
+    {
+      "id": "AT-55",
+      "case": "Consecutive option on, start 93",
+      "expected": "First Leg ID V2 is L000093; the summary shows the next start number"
+    },
+    {
+      "id": "AT-56",
+      "case": "Consecutive option on",
+      "expected": "Vendor ID, Leg ID, Tobi MRN, Pair Status and the catalog are identical to the run with the option off"
+    },
+    {
+      "id": "AT-57",
+      "case": "Start number 0, 1.5, text or 1000000",
+      "expected": "Rejected before processing"
+    },
+    {
+      "id": "AT-58",
+      "case": "Start number plus Output rows exceeds 999999",
+      "expected_exception": "LEG_ID_V2_SEQUENCE_OVERFLOW; Output not produced"
+    }
+  ],
+  "consistency_contract_patch": {
+    "acceptance_test_id_range": "AT-01..AT-58 with no gaps after applying v2.5.0, v2.6.0, v2.7.0, v2.7.1 and v2.8.0"
+  },
+  "acceptance_test_suite": {
+    "rules_version": "2.8.0",
+    "embedded_acceptance_cases": "AT-01 to AT-58"
+  }
+}

@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "specification": {
+    "id": "nctd-manifest-parser",
+    "name": "NCTD Manifest Parser",
+    "organization": "North County Transit District",
+    "version": "2.6.0",
+    "status": "candidate_for_tobi_stage_validation",
+    "target_runtime": "Node.js",
+    "updated": "2026-11-13",
+    "extends": {
+      "file": "nctd_manifest_parser_rules_v2.5.0.json",
+      "version": "2.5.0",
+      "merge_strategy": "deep_merge_by_key",
+      "rule": "All v2.5.0 rules remain active unless explicitly added or overridden in this file. This version only adds the experimental Leg ID V2 field and its tests."
+    },
+    "description": "Additive v2.6.0 rules overlay for testing independent TOBI bookings without changing the existing v2.5.0 Vendor ID, Leg ID, Tobi MRN, Pair Status, companion, fare, catalog, validation, or pairing behavior.",
+    "changelog": [
+      {
+        "version": "2.6.0",
+        "date": "2026-11-13",
+        "changes": [
+          "Added experimental Destination column Leg ID V2.",
+          "CLI rows copy the existing Leg ID into Leg ID V2.",
+          "PCA, COM and COMP rows copy the existing Vendor ID into Leg ID V2.",
+          "The original Leg ID, Vendor ID, Tobi MRN, Pair Status and PAIRING-001 behavior remain unchanged.",
+          "Added collision and format validation for Leg ID V2.",
+          "Added acceptance tests AT-39 through AT-44.",
+          "Production use remains disabled until TOBI Stage confirms that the field creates independent one-way bookings."
+        ]
+      }
+    ]
+  },
+  "deployment_policy": {
+    "production_enabled": false,
+    "stage_validation_required": true,
+    "promotion_gate": [
+      "Every Leg ID V2 is nonblank and alphanumeric.",
+      "Every Leg ID V2 is unique across the post-deduplication Destination output.",
+      "TOBI Stage creates Client A, PCA A, Client B and PCA B as independent one-way bookings when present.",
+      "Reimport updates records instead of duplicating them.",
+      "Passenger catalog and PCA identity remain unchanged.",
+      "Business approval is recorded."
+    ]
+  },
+  "destination_columns_patch": {
+    "operation": "insert_after",
+    "after": "Leg ID",
+    "column": "Leg ID V2",
+    "type": "text",
+    "required_for_valid_destination_rows": true
+  },
+  "processing_pipeline_patch": {
+    "operation": "insert_after",
+    "after": "generate_leg_id",
+    "step": "generate_leg_id_v2"
+  },
+  "experimental_rules": {
+    "leg_id_v2": {
+      "rule_id": "LEG-ID-V2-EXPERIMENTAL-001",
+      "target": "Leg ID V2",
+      "purpose": "Provide a different deterministic Leg Identifier for each exported row during controlled TOBI independent-booking tests.",
+      "scope": "valid Destination rows after exact deduplication and after Vendor ID and Leg ID generation",
+      "enabled_by_default": false,
+      "enabled_in": ["local validation", "TOBI Stage controlled import"],
+      "production_enabled": false,
+      "classification_source": "normalized Passenger Ty",
+      "rules": [
+        {
+          "when": {
+            "Passenger Ty": ["CLI"]
+          },
+          "value_from": "Leg ID",
+          "expression": "Leg ID V2 = Leg ID"
+        },
+        {
+          "when": {
+            "Passenger Ty": ["PCA", "COM", "COMP"]
+          },
+          "value_from": "Vendor ID",
+          "expression": "Leg ID V2 = Vendor ID"
+        }
+      ],
+      "invariants": [
+        "Do not modify Vendor ID.",
+        "Do not modify Leg ID.",
+        "Do not modify Tobi MRN.",
+        "Do not modify Pair Status.",
+        "Do not modify PAIRING-001.",
+        "Do not modify Booking Fare.",
+        "Do not modify passenger catalog identity or companion naming.",
+        "Do not use PULat or PULon in Leg ID V2.",
+        "Do not append a counter or random value."
+      ],
+      "deterministic": true,
+      "idempotent": true,
+      "allowed_regex": "^[A-Za-z0-9]+$",
+      "special_characters_allowed": false,
+      "uniqueness_scope": "entire Destination output after exact deduplication",
+      "collision_code": "LEG_ID_V2_COLLISION",
+      "invalid_code": "INVALID_LEG_ID_V2",
+      "on_collision": "ERROR_AND_BLOCK_EXPERIMENTAL_EXPORT",
+      "on_invalid": "ERROR_AND_BLOCK_EXPERIMENTAL_EXPORT",
+      "export_adapter": {
+        "standard_mode": {
+          "tobi_leg_identifier_source": "Leg ID"
+        },
+        "independent_legs_experimental_mode": {
+          "tobi_leg_identifier_source": "Leg ID V2",
+          "preserve_original_leg_id_column": true,
+          "mode_name": "TOBI_INDEPENDENT_LEGS_V2"
+        }
+      },
+      "expected_mapping": {
+        "client_single_leg": "Leg ID V2 equals client Leg ID",
+        "client_with_companion_single_leg": {
+          "client": "Leg ID V2 equals client Leg ID",
+          "companion": "Leg ID V2 equals companion Vendor ID"
+        },
+        "client_round_trip": {
+          "client_a": "Leg ID V2 equals client A Leg ID",
+          "client_b": "Leg ID V2 equals client B Leg ID"
+        },
+        "client_with_companion_round_trip": {
+          "client_a": "Leg ID V2 equals client A Leg ID",
+          "companion_a": "Leg ID V2 equals companion A Vendor ID",
+          "client_b": "Leg ID V2 equals client B Leg ID",
+          "companion_b": "Leg ID V2 equals companion B Vendor ID"
+        }
+      },
+      "examples": [
+        {
+          "Passenger Ty": "CLI",
+          "Vendor ID": "82475202611220755",
+          "Leg ID": "82475202611220755A",
+          "Leg ID V2": "82475202611220755A"
+        },
+        {
+          "Passenger Ty": "PCA",
+          "Vendor ID": "82475202611220755PCA",
+          "Leg ID": "82475202611220755PCAA",
+          "Leg ID V2": "82475202611220755PCA"
+        },
+        {
+          "Passenger Ty": "CLI",
+          "Vendor ID": "82475202611221530",
+          "Leg ID": "82475202611221530B",
+          "Leg ID V2": "82475202611221530B"
+        },
+        {
+          "Passenger Ty": "PCA",
+          "Vendor ID": "82475202611221530PCA",
+          "Leg ID": "82475202611221530PCAB",
+          "Leg ID V2": "82475202611221530PCA"
+        }
+      ]
+    }
+  },
+  "export_gate_patch": {
+    "blocking_exceptions_when_experimental_mode_enabled": [
+      "LEG_ID_V2_COLLISION",
+      "INVALID_LEG_ID_V2"
+    ],
+    "when_blocked": "Do not produce the experimental TOBI Output file. Continue producing Invalid Trips, passenger catalog updates, and the processing summary according to v2.5.0."
+  },
+  "validations_patch": [
+    {
+      "validation_id": "VAL-011",
+      "assertion": "Every Leg ID V2 is nonblank and matches ^[A-Za-z0-9]+$ when TOBI_INDEPENDENT_LEGS_V2 is enabled.",
+      "severity": "ERROR"
+    },
+    {
+      "validation_id": "VAL-012",
+      "assertion": "Leg ID V2 is unique across the Destination output after exact deduplication when TOBI_INDEPENDENT_LEGS_V2 is enabled.",
+      "severity": "ERROR"
+    },
+    {
+      "validation_id": "VAL-013",
+      "assertion": "CLI Leg ID V2 equals the existing CLI Leg ID.",
+      "severity": "ERROR"
+    },
+    {
+      "validation_id": "VAL-014",
+      "assertion": "PCA, COM and COMP Leg ID V2 equals the existing companion Vendor ID.",
+      "severity": "ERROR"
+    },
+    {
+      "validation_id": "VAL-015",
+      "assertion": "Reprocessing identical Source and catalog files produces identical Leg ID V2 values.",
+      "severity": "ERROR"
+    }
+  ],
+  "exceptions_patch": {
+    "LEG_ID_V2_COLLISION": "blocking_when_experimental_mode_enabled",
+    "INVALID_LEG_ID_V2": "blocking_when_experimental_mode_enabled"
+  },
+  "acceptance_tests_patch": [
+    {
+      "id": "AT-39",
+      "case": "Single CLI single Leg",
+      "expected": "Leg ID V2 equals Leg ID. All v2.5.0 output fields remain unchanged."
+    },
+    {
+      "id": "AT-40",
+      "case": "CLI and PCA single Leg",
+      "expected": "CLI Leg ID V2 equals CLI Leg ID; PCA Leg ID V2 equals PCA Vendor ID; the two values are different."
+    },
+    {
+      "id": "AT-41",
+      "case": "CLI reciprocal A/B pair without companion",
+      "expected": "Client A and Client B Leg ID V2 values equal their respective Leg IDs and are different."
+    },
+    {
+      "id": "AT-42",
+      "case": "CLI and PCA reciprocal A/B pair",
+      "expected": "Client A uses client A Leg ID; PCA A uses PCA A Vendor ID; Client B uses client B Leg ID; PCA B uses PCA B Vendor ID; all four Leg ID V2 values are different."
+    },
+    {
+      "id": "AT-43",
+      "case": "Reprocess the same valid input",
+      "expected": "All Leg ID V2 values are identical to the prior run."
+    },
+    {
+      "id": "AT-44",
+      "case": "Two rows generate the same Leg ID V2 after exact deduplication",
+      "expected_exception": "LEG_ID_V2_COLLISION; experimental TOBI Output is blocked."
+    }
+  ],
+  "consistency_contract_patch": {
+    "active_identifier_fields": [
+      "Vendor ID",
+      "Leg ID",
+      "Leg ID V2",
+      "Tobi MRN"
+    ],
+    "Leg ID V2": {
+      "status": "experimental",
+      "replaces_Leg_ID": false,
+      "production_authoritative": false
+    },
+    "acceptance_test_id_range": "AT-01..AT-44 with no gaps after applying this overlay to v2.5.0"
+  }
+}
