@@ -81,9 +81,9 @@ test('AT-07 required field contains Empty -> Invalid Trips, export not blocked',
   assert.equal(r.summary.exportReady, true);
 });
 
-test('AT-08 phones: from Comments, default 9876543210', async () => {
+test('AT-08 phones: from Comments, default 8584020500', async () => {
   let r = await run([row({ Comments: 'CALL ON ARRIVAL' })]);
-  assert.equal(r.destinationRows[0]['Primary Phone'], '9876543210');
+  assert.equal(r.destinationRows[0]['Primary Phone'], '8584020500');
   r = await run([row({ Comments: 'C: 760-555-0101 H: (760) 555-0102' })]);
   assert.equal(r.destinationRows[0]['Primary Phone'], '7605550101');
   assert.equal(r.destinationRows[0]['Secondary Phone'], '7605550102');

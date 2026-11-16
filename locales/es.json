@@ -81,6 +81,7 @@
   "exc.UNKNOWN_SPACE_TYPE": "Space Type fuera del catálogo",
   "sev.blocking": "bloqueante",
   "summary.catalogMigrated": "Acompañantes corregidos al formato v2.7 (-PCA / -COM)",
+  "summary.catalogPhonesMigrated": "Teléfonos 9876543210 cambiados a 8584020500",
   "summary.catalogMatched": "Pasajeros ya en el catálogo",
   "summary.catalogRows": "filas del catálogo",
   "exc.NO_PASSENGER_CATALOG": "No se cargó el catálogo de Pasajeros: todos los pasajeros se trataron como nuevos y sus datos podrían no coincidir con días anteriores",

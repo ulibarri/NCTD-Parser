@@ -8,8 +8,8 @@ const { rules, row, run } = require('./helpers');
 
 const one = async (name, extra = {}) => (await run([row({ 'Client Name': name, ...extra })])).destinationRows[0];
 
-test('rules: v2.8.1 nickname rule, character cleanup no longer on Client Name, CBLA kept', () => {
-  assert.equal(rules.specification.version, '2.8.1');
+test('rules: v2.8.1 nickname rule (active since v2.8.1), character cleanup no longer on Client Name, CBLA kept', () => {
+  assert.ok(rules.specification.changelog.some((c) => c.version === '2.8.1'));
   assert.ok(!rules.normalization.source_character_cleanup.columns.includes('Client Name'));
   assert.equal(rules.field_rules.client_name.nickname_removal.rule_id, 'CLIENT-NAME-NICKNAME-001');
   assert.deepEqual(rules.field_rules.tobi_tags.rules[0].phrases.sort(),

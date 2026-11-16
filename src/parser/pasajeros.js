@@ -10,6 +10,8 @@
 // companion rows (MRN ending in PCA or COM) get the v2.7.0 names: First Name
 // ends with -PCA or -COM exactly once and Last Name loses a trailing COMPANION,
 // PCA or COM. Client rows are not touched. The migration is idempotent.
+// v2.8.2 (CATALOG-PHONE-MIGRATION-001): a Telephone equal to the old fallback
+// 9876543210 becomes the current Primary Phone default, 8584020500.
 
 const F = require('./fields');
 
@@ -37,6 +39,10 @@ function applyCatalog(catalog, destinationRows, sourceRowOf, rules) {
   const migration = (rules.passenger_catalog.migration_rules || []).find((m) => Array.isArray(m.identity_suffixes));
   const col = (name) => headers[columns.indexOf(name)];
   let migrated = 0;
+  let phonesMigrated = 0;
+  const phoneMigration = rules.passenger_catalog.phone_migration;
+  const legacyPhones = new Set((phoneMigration?.legacy_values || []).map((v) => String(v).replace(/\D/g, '')));
+  const phoneDefault = rules.field_rules.phones['Primary Phone'].default;
   const catalogRows = catalog ? catalog.rows.map((r) => ({ ...r, values: { ...r.values } })) : [];
   const rows = catalogRows.map((r) => {
     const out = {};
@@ -53,6 +59,12 @@ function applyCatalog(catalog, destinationRows, sourceRowOf, rules) {
       }
       r.values['First Name'] = first;
       r.values['Last Name'] = last;
+    }
+    const phone = String(r.values.Telephone ?? '').replace(/\D/g, '');
+    if (legacyPhones.has(phone) && phone !== phoneDefault && col('Telephone')) {
+      phonesMigrated += 1;
+      out[col('Telephone')] = phoneDefault;
+      r.values.Telephone = phoneDefault;
     }
     return out;
   });
@@ -111,7 +123,7 @@ function applyCatalog(catalog, destinationRows, sourceRowOf, rules) {
     d['Primary Phone'] = entry['Primary Phone'];
   }
 
-  return { headers, rows, added: added.length, matched: matched.size, migrated, provided: Boolean(catalog), exceptions };
+  return { headers, rows, added: added.length, matched: matched.size, migrated, phonesMigrated, provided: Boolean(catalog), exceptions };
 }
 
 const flagsOf = (migration) => (migration.case_sensitive ? '' : 'i');

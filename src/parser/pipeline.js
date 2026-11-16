@@ -384,6 +384,7 @@ async function processViajes({ table, rules, overrideDate = null, catalog = null
     catalogMatched: catalogResult.matched,
     pasajerosAdded: catalogResult.added,
     catalogMigrated: catalogResult.migrated,
+    catalogPhonesMigrated: catalogResult.phonesMigrated,
     legIdV2Mode: Boolean(legIdV2Mode),
     legIdV2Sequence: sequence,
     legIdV2ModeName: v2Rule ? v2Rule.export_adapter.independent_legs_experimental_mode.mode_name : null,

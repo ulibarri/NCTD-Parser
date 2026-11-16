@@ -28,29 +28,29 @@ test('AT-22 new passenger with a phone: appended with that phone', async () => {
   assert.equal(r.summary.pasajerosAdded, 1);
 });
 
-test('AT-23 new passenger without a phone: stored with 9876543210', async () => {
+test('AT-23 new passenger without a phone: stored with 8584020500', async () => {
   const r = await run([row()], { catalog: catalog([]) });
-  assert.equal(r.catalog.rows[0].Telephone, '9876543210');
+  assert.equal(r.catalog.rows[0].Telephone, '8584020500');
 });
 
 test('AT-24 new passenger twice in the same file: the first source row defines the values', async () => {
   // first source row (07:55) has no phone; the later one (15:00) does
   const r = await run([row(), row({ PUTime: '15:00', PUAddress: '9 OTHER RD', Comments: 'C: 760-555-0110' })], { catalog: catalog([]) });
-  assert.deepEqual(r.destinationRows.map((d) => d['Primary Phone']), ['9876543210', '9876543210']);
+  assert.deepEqual(r.destinationRows.map((d) => d['Primary Phone']), ['8584020500', '8584020500']);
   assert.equal(r.catalog.rows.length, 1);
 });
 
 test('AT-24b the next day the same passenger keeps the catalog phone', async () => {
   const day1 = await run([row()], { catalog: catalog([]) });
   const day2 = await run([row({ TripDate: '10/24/2026', Comments: 'C: 760-555-0110' })], { catalog: catalog(day1.catalog.rows) });
-  assert.equal(day2.destinationRows[0]['Primary Phone'], '9876543210');
+  assert.equal(day2.destinationRows[0]['Primary Phone'], '8584020500');
   assert.equal(day2.summary.pasajerosAdded, 0);
 });
 
 test('AT-25 new PCA: own catalog row', async () => {
   const r = await run([row(), row({ 'Passenger Ty': 'PCA', Comments: 'PCA CELL 760-555-0120' })], { catalog: catalog([]) });
   assert.deepEqual(r.catalog.rows, [
-    { 'First Name': 'JANE', 'Last Name': 'DOE', 'MRN Number': '1001', Telephone: '9876543210' },
+    { 'First Name': 'JANE', 'Last Name': 'DOE', 'MRN Number': '1001', Telephone: '8584020500' },
     { 'First Name': 'JANE-PCA', 'Last Name': 'DOE', 'MRN Number': '1001PCA', Telephone: '7605550120' },
   ]);
 });
@@ -96,7 +96,7 @@ for (const type of ['PCA', 'COM', 'COMP']) {
     assert.equal(d['Tobi MRN'], `82475${sfx}`);
     assert.equal(d['Vendor ID'], `82475202610230755${sfx}`);
     assert.equal(d['Leg ID'], `82475202610230755${sfx}A`);
-    assert.deepEqual(r.catalog.rows, [{ 'First Name': `DEANNE-${sfx}`, 'Last Name': 'ALLOUCHE', 'MRN Number': `82475${sfx}`, Telephone: '9876543210' }]);
+    assert.deepEqual(r.catalog.rows, [{ 'First Name': `DEANNE-${sfx}`, 'Last Name': 'ALLOUCHE', 'MRN Number': `82475${sfx}`, Telephone: '8584020500' }]);
   });
 }
 
@@ -141,7 +141,7 @@ test('AT-32 old-format companion catalog rows are migrated to v2.7 names (CATALO
 
 test('AT-33 reprocessing a catalog in the v2.7 format changes nothing', async () => {
   const day1 = await run([row({ 'Client Name': 'ALLOUCHE,DEANNE', 'Client ID': '82475', 'Passenger Ty': 'PCA' })], { catalog: catalog([]) });
-  assert.deepEqual(day1.catalog.rows, [{ 'First Name': 'DEANNE-PCA', 'Last Name': 'ALLOUCHE', 'MRN Number': '82475PCA', Telephone: '9876543210' }]);
+  assert.deepEqual(day1.catalog.rows, [{ 'First Name': 'DEANNE-PCA', 'Last Name': 'ALLOUCHE', 'MRN Number': '82475PCA', Telephone: '8584020500' }]);
   const day2 = await run([row({ 'Client Name': 'ALLOUCHE,DEANNE', 'Client ID': '82475', 'Passenger Ty': 'PCA' })], { catalog: catalog(day1.catalog.rows) });
   assert.deepEqual(day2.catalog.rows, day1.catalog.rows);
   assert.equal(day2.summary.catalogMigrated, 0);

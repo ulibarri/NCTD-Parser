@@ -81,6 +81,7 @@
   "exc.UNKNOWN_SPACE_TYPE": "Space Type outside the catalog",
   "sev.blocking": "blocking",
   "summary.catalogMigrated": "Companions updated to the v2.7 format (-PCA / -COM)",
+  "summary.catalogPhonesMigrated": "Phones 9876543210 changed to 8584020500",
   "summary.catalogMatched": "Passengers already in the catalog",
   "summary.catalogRows": "catalog rows",
   "exc.NO_PASSENGER_CATALOG": "No Passengers catalog was uploaded: every passenger was treated as new and their data may not match earlier days",

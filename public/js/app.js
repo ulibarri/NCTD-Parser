@@ -367,6 +367,7 @@
       ['summary.catalogMatched', s.catalogProvided ? s.catalogMatched : '—'],
       ['summary.pasajerosAdded', s.pasajerosAdded],
       ['summary.catalogMigrated', s.catalogProvided ? s.catalogMigrated : '—'],
+      ['summary.catalogPhonesMigrated', s.catalogProvided ? s.catalogPhonesMigrated : '—'],
     ];
     for (const [key, value, note] of items) {
       const div = document.createElement('div');

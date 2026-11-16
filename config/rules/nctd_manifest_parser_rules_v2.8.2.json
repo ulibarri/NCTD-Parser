@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "specification": {
+    "id": "nctd-manifest-parser",
+    "name": "NCTD Manifest Parser",
+    "organization": "North County Transit District",
+    "version": "2.8.2",
+    "status": "production",
+    "target_runtime": "Node.js",
+    "updated": "2026-11-16",
+    "extends": {
+      "file": "nctd_manifest_parser_rules_v2.8.1.json",
+      "version": "2.8.1",
+      "merge_strategy": "deep_merge_by_key",
+      "rule": "All v2.8.1 rules remain active. This version only changes the Primary Phone fallback."
+    },
+    "description": "v2.8.2 overlay: when no valid phone exists in any source, Primary Phone is 8584020500 instead of 9876543210. Catalog rows that still hold 9876543210 are updated to 8584020500 on upload.",
+    "changelog": [
+      {
+        "version": "2.8.2",
+        "date": "2026-11-16",
+        "changes": [
+          "PHONE-DEFAULT-002: when no valid phone is found in Comments or in the passenger catalog, Primary Phone is 8584020500 (was 9876543210) (decision 2026-11-16).",
+          "New passengers without a phone are stored in the catalog with 8584020500; the value stays locked like any other catalog phone.",
+          "CATALOG-PHONE-MIGRATION-001: an uploaded catalog row whose Telephone is the old fallback 9876543210 is changed to 8584020500, because 9876543210 was never a real phone. Real phones are not touched. The migration is idempotent.",
+          "Secondary Phone is unchanged (empty when there is no second valid phone).",
+          "AT-08, AT-23 and AT-24 now expect 8584020500. Added acceptance tests AT-63 and AT-64."
+        ]
+      }
+    ]
+  },
+  "field_rules": {
+    "phones": {
+      "Primary Phone": {
+        "default": "8584020500",
+        "default_rule_id": "PHONE-DEFAULT-002",
+        "default_applies_when": "No valid phone in Comments and, for passengers in the catalog, no valid catalog Telephone.",
+        "previous_default": "9876543210 (until v2.8.1)"
+      }
+    }
+  },
+  "passenger_catalog": {
+    "new_passenger": {
+      "phone_default": "8584020500 is stored when no valid phone is found; it is not replaced later (PHONE-DEFAULT-002, v2.8.2)."
+    },
+    "phone_migration": {
+      "rule_id": "CATALOG-PHONE-MIGRATION-001",
+      "legacy_values": [
+        "9876543210"
+      ],
+      "replacement": "field_rules.phones.Primary Phone.default",
+      "action": "On upload, a catalog Telephone equal to a legacy value (digits only) is replaced by the current Primary Phone default, 8584020500. The updated catalog file keeps the new value.",
+      "not_applied_to": "Real phones, including any other value repeated by several passengers.",
+      "idempotent": true,
+      "summary_field": "catalogPhonesMigrated",
+      "decided_by": "Majo, 2026-11-16"
+    }
+  },
+  "acceptance_tests_patch": [
+    {
+      "id": "AT-08",
+      "case": "No valid phone",
+      "expected": {
+        "Primary Phone": "8584020500"
+      }
+    },
+    {
+      "id": "AT-23",
+      "case": "New passenger without a phone",
+      "expected": "Catalog row with Telephone 8584020500"
+    },
+    {
+      "id": "AT-24",
+      "case": "New passenger in two rows of the same file, phone only in the second row",
+      "expected": "Both rows use the values of the first row (8584020500); one catalog row"
+    },
+    {
+      "id": "AT-63",
+      "case": "No valid phone in Comments; new passenger and passenger already in the catalog with a real phone",
+      "expected": "New passenger: Primary Phone 8584020500 and catalog Telephone 8584020500; catalog passenger keeps its catalog phone; 9876543210 appears nowhere"
+    },
+    {
+      "id": "AT-64",
+      "case": "Uploaded catalog row with Telephone 9876543210 (or 987-654-3210)",
+      "expected": "Output Primary Phone and updated catalog Telephone are 8584020500; other catalog phones unchanged; catalogPhonesMigrated counts the row; uploading the result again changes nothing"
+    }
+  ],
+  "consistency_contract_patch": {
+    "acceptance_test_id_range": "AT-01..AT-64 with no gaps after applying v2.5.0 to v2.8.2",
+    "phone_fallback": "9876543210 never appears in the Output or in the updated catalog."
+  },
+  "acceptance_test_suite": {
+    "rules_version": "2.8.2",
+    "embedded_acceptance_cases": "AT-01 to AT-64"
+  }
+}
