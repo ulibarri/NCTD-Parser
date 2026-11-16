@@ -183,12 +183,42 @@ function tobiTags(values, rule) {
   return joinUnique(tags, rule.delimiter);
 }
 
-function bookingNotes(comments, spaceType, rule) {
+function bookingNotes(comments, spaceType, rule, extra = []) {
   const parts = [comments];
   for (const r of rule.append_rules) {
     if (upper(spaceType) === String(r.when['Space Type']).toUpperCase()) parts.push(r.value);
   }
+  parts.push(...extra); // e.g. "Nickname: MICHAEL" (CLIENT-NAME-NICKNAME-001), always last
   return joinUnique(parts, rule.delimiter);
+}
+
+/**
+ * CLIENT-NAME-NICKNAME-001 (v2.8.1): removes nicknames written between the
+ * delimiter pairs of the rule, e.g. ( ), [ ], " " or “ ”, with their delimiters.
+ * A delimiter without its pair is removed and the text next to it is kept.
+ * Returns the cleaned name and the nicknames found.
+ */
+function removeNicknames(value, rule) {
+  let text = String(value ?? '');
+  const nicknames = [];
+  if (!rule) return { value: collapse(text), nicknames };
+  for (const [open, close] of rule.pairs) {
+    const re = new RegExp(`${escapeRe(open)}([^${escapeRe(open)}${escapeRe(close)}]*)${escapeRe(close)}`, 'g');
+    text = text.replace(re, (_, inner) => {
+      const nick = collapse(inner);
+      if (nick) nicknames.push(nick);
+      return ' ';
+    });
+  }
+  for (const ch of new Set(rule.pairs.flat())) text = text.split(ch).join(' ');
+  return { value: collapse(text).replace(/\s+,/g, ',').replace(/,\s+/g, ','), nicknames };
+}
+
+/** Booking Notes text for the nicknames of CLIENT-NAME-NICKNAME-001, or null. */
+function nicknameNote(nicknames, rule) {
+  if (!rule || !nicknames || !nicknames.length) return null;
+  const note = rule.booking_note;
+  return note.format.replace('{nicknames}', nicknames.join(note.nickname_separator));
 }
 
 /** Keywords are matched inside the location names; pickup is checked first. */
@@ -219,6 +249,8 @@ function spaceType(value, rule) {
 }
 
 module.exports = {
+  removeNicknames,
+  nicknameNote,
   passengerIdentity,
   cleanWith,
   removeCharacters,

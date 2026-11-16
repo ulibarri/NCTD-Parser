@@ -226,14 +226,16 @@ test('AT-35 Client Name with an empty part -> Invalid Trips', async () => {
   assert.equal(ok.destinationRows.length, 2);
 });
 
-test('AT-36 brackets removed from Client Name, enclosed text kept', async () => {
+test('AT-36 nickname removed from Client Name and kept in Booking Notes (v2.8.1)', async () => {
   const r = await run([row({ 'Client Name': 'MATTHEWS,SCOTT  (MICHAEL)' })]);
   assert.equal(r.destinationRows[0]['Last Name'], 'MATTHEWS');
-  assert.equal(r.destinationRows[0]['First Name'], 'SCOTT MICHAEL');
-  assert.deepEqual(r.catalog.rows.map((c) => c['First Name']), ['SCOTT MICHAEL']);
-  const pca = await run([row({ 'Client Name': '[DOE],(JANE) - PCA', 'Passenger Ty': 'PCA' })]);
+  assert.equal(r.destinationRows[0]['First Name'], 'SCOTT');
+  assert.equal(r.destinationRows[0]['Booking Notes'], 'Nickname: MICHAEL');
+  assert.deepEqual(r.catalog.rows.map((c) => c['First Name']), ['SCOTT']);
+  const pca = await run([row({ 'Client Name': 'DOE,JANE (JJ) - PCA', 'Passenger Ty': 'PCA' })]);
   assert.equal(pca.destinationRows[0]['First Name'], 'JANE-PCA');
   assert.equal(pca.destinationRows[0]['Last Name'], 'DOE');
+  assert.equal(pca.destinationRows[0]['Booking Notes'], 'Nickname: JJ');
 });
 
 test('AT-37 brackets removed from address, city and ZIP before validation', async () => {

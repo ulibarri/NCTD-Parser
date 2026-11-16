@@ -13,7 +13,7 @@ const path = require('node:path');
 
 const RULES_DIR = path.join(__dirname, '..', 'config', 'rules');
 const RULES_FILE = process.env.RULES_FILE
-  || path.join(RULES_DIR, 'nctd_manifest_parser_rules_v2.8.0.json');
+  || path.join(RULES_DIR, 'nctd_manifest_parser_rules_v2.8.1.json');
 
 let cached = null;
 

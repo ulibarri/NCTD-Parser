@@ -16,11 +16,10 @@ const ids = (r, col) => r.destinationRows.map((d) => d[col]);
 
 test('rules: v2.8.0 adds the consecutive option (L + 6 digits, start 1..999999)', () => {
   const o = rules.experimental_rules.leg_id_v2.sequential_option;
-  assert.equal(rules.specification.version, '2.8.0');
   assert.equal(o.label.es, 'Asignar números consecutivos a Leg ID V2');
   assert.deepEqual([o.format.prefix, o.format.digits, o.start.default], ['L', 6, 1]);
   assert.equal(rules.exceptions.LEG_ID_V2_SEQUENCE_OVERFLOW, 'blocking');
-  assert.equal(rules.acceptance_tests.at(-1).id, 'AT-58');
+  assert.ok(rules.acceptance_tests.some((t) => t.id === 'AT-58'));
 });
 
 test('AT-54 start 1: L000001, L000002, ... in Output row order', async () => {

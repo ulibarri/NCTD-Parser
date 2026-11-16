@@ -161,11 +161,19 @@ async function processViajes({ table, rules, overrideDate = null, catalog = null
   const valid = [];
   // clean_source_characters (SOURCE-SPECIAL-CHARS-001); row.original is kept for Invalid Trips
   const cleanup = rules.normalization.source_character_cleanup;
-  const cleaned = cleanup ? sourceRows.map((row) => {
+  // remove_client_name_nicknames (CLIENT-NAME-NICKNAME-001, v2.8.1): the nickname goes to Booking Notes
+  const nicknameRule = rules.field_rules.client_name.nickname_removal;
+  const cleaned = sourceRows.map((row) => {
     const values = { ...row.values };
-    for (const c of cleanup.columns) if (c in values) values[c] = F.removeCharacters(values[c], cleanup.remove_characters);
-    return { ...row, values };
-  }) : sourceRows;
+    let nicknames = [];
+    if (nicknameRule && 'Client Name' in values) {
+      const r = F.removeNicknames(values['Client Name'], nicknameRule);
+      values['Client Name'] = r.value;
+      nicknames = r.nicknames;
+    }
+    if (cleanup) for (const c of cleanup.columns) if (c in values) values[c] = F.removeCharacters(values[c], cleanup.remove_characters);
+    return { ...row, values, nicknames };
+  });
   for (const row of cleaned) {
     const { invalidFields, errors } = validateRow(row.values, rules);
     if (invalidFields.length) invalid.push({ row, status: rules.required_field_validation.invalid_action.status, fields: invalidFields, errors });
@@ -442,7 +450,8 @@ function mapRow(l, vendorId, legId, rules, unknownSpaceTypes) {
     'Tobi Tags': F.tobiTags(v, fr.tobi_tags),
     'Trip Purpose': F.tripPurpose(v.PickUpLocationName, v.DropLocationName, fr.trip_purpose),
     'Leg Notes': F.legNotes(v, fr.leg_notes),
-    'Booking Notes': F.bookingNotes(v.Comments, v['Space Type'], fr.booking_notes),
+    'Booking Notes': F.bookingNotes(v.Comments, v['Space Type'], fr.booking_notes,
+      [F.nicknameNote(l.row.nicknames, fr.client_name.nickname_removal)].filter(Boolean)),
     'Seating Need': space.value,
     'Service Type': space.value,
   };

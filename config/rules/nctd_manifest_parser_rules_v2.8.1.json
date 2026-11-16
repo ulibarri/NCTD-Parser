@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "specification": {
+    "id": "nctd-manifest-parser",
+    "name": "NCTD Manifest Parser",
+    "organization": "North County Transit District",
+    "version": "2.8.1",
+    "status": "candidate_for_local_and_tobi_stage_validation",
+    "target_runtime": "Node.js",
+    "updated": "2026-11-15",
+    "extends": {
+      "file": "nctd_manifest_parser_rules_v2.8.0.json",
+      "version": "2.8.0",
+      "merge_strategy": "deep_merge_by_key",
+      "rule": "All v2.8.0 rules remain active. This version removes nicknames from Client Name, moves them to Booking Notes and records the CBLA tag decision."
+    },
+    "description": "v2.8.1 overlay: nicknames in Client Name, written between ( ), [ ] or double quotes, are removed together with their delimiters and kept in Booking Notes, to avoid aliases in TOBI.",
+    "changelog": [
+      {
+        "version": "2.8.1",
+        "date": "2026-11-15",
+        "changes": [
+          "Added CLIENT-NAME-NICKNAME-001: a nickname between ( ), [ ], \" \" or “ ” in Client Name is removed with its delimiters (MATTHEWS,SCOTT  (MICHAEL) -> MATTHEWS / SCOTT), because TOBI uses the name as a key and a nickname creates aliases (decision 2026-11-15).",
+          "The removed nickname is appended to Booking Notes as \"Nickname: MICHAEL\", after any other Booking Notes content.",
+          "SOURCE-SPECIAL-CHARS-001 no longer applies to Client Name; it still removes ( ) [ ] from PUAddress, PUCity, PUZipcode, DOAddress, DOCity and DOZipcode, keeping the text.",
+          "Recorded: the CBLA tag stays in Tobi Tags with its five detection phrases, including CBLA and CAN NOT BE LEFT ALONE (decision 2026-11-15).",
+          "The passenger catalog is regenerated from the 2026-10-23 manifest with these rules (decision 2026-11-15).",
+          "Added acceptance tests AT-59 to AT-62."
+        ]
+      }
+    ]
+  },
+  "normalization": {
+    "source_character_cleanup": {
+      "columns": [
+        "PUAddress",
+        "PUCity",
+        "PUZipcode",
+        "DOAddress",
+        "DOCity",
+        "DOZipcode"
+      ],
+      "client_name": "Not applied to Client Name since v2.8.1; see field_rules.client_name.nickname_removal (CLIENT-NAME-NICKNAME-001).",
+      "example": {
+        "PUAddress": "200 MISSION AVE (STE 5)",
+        "cleaned": "200 MISSION AVE STE 5",
+        "Pickup Address": "200 MISSION AVE",
+        "Pickup Suite": "STE 5"
+      }
+    }
+  },
+  "field_rules": {
+    "client_name": {
+      "nickname_removal": {
+        "rule_id": "CLIENT-NAME-NICKNAME-001",
+        "source": "Client Name",
+        "pairs": [
+          [
+            "(",
+            ")"
+          ],
+          [
+            "[",
+            "]"
+          ],
+          [
+            "\"",
+            "\""
+          ],
+          [
+            "“",
+            "”"
+          ]
+        ],
+        "action": "Remove each nickname together with its delimiters, then collapse repeated spaces and trim.",
+        "unmatched_delimiters": "A delimiter without its pair is removed; the text next to it is kept.",
+        "not_delimiters": "Single quotes and apostrophes are not touched (O'BRIEN).",
+        "applies_before": "validate_required_fields: CLIENT-NAME-FORMAT-001 checks the name without the nickname, so DOE,(JANE) goes to Invalid Trips.",
+        "booking_note": {
+          "target": "Booking Notes",
+          "format": "Nickname: {nicknames}",
+          "nickname_separator": " / ",
+          "position": "Appended after the other Booking Notes content (Comments, Lift Required), joined with the Booking Notes delimiter.",
+          "empty_nickname": "No note is written."
+        },
+        "invalid_trips": "Invalid Trips keeps the original Client Name, nickname included.",
+        "passenger_catalog": "Not applied to an uploaded catalog; the catalog is regenerated from the 2026-10-23 manifest (decision 2026-11-15).",
+        "examples": [
+          {
+            "Client Name": "MATTHEWS,SCOTT  (MICHAEL)",
+            "Last Name": "MATTHEWS",
+            "First Name": "SCOTT",
+            "Booking Notes": "... , Nickname: MICHAEL"
+          },
+          {
+            "Client Name": "DOE,JANE \"JJ\"",
+            "Last Name": "DOE",
+            "First Name": "JANE",
+            "Booking Notes": "Nickname: JJ"
+          },
+          {
+            "Client Name": "LOPEZ,MARIA [MARY]",
+            "Passenger Ty": "PCA",
+            "Last Name": "LOPEZ",
+            "First Name": "MARIA-PCA",
+            "Booking Notes": "Nickname: MARY"
+          },
+          {
+            "Client Name": "DOE,(JANE)",
+            "result": "Invalid Trips (INVALID_CLIENT_NAME_FORMAT)"
+          }
+        ],
+        "reason": "TOBI uses the passenger name as a key; a nickname in the name creates aliases.",
+        "decided_by": "Majo, 2026-11-15"
+      }
+    },
+    "tobi_tags": {
+      "decision_2026_11_15": "The CBLA tag stays in Tobi Tags. Detection phrases: CANNOT BE LEFT ALONE, CAN NOT BE LEFT ALONE, CBLA, DO NOT LEAVE ALONE, DO NOT LEAVE UNATTENDED."
+    }
+  },
+  "processing_pipeline_patch": {
+    "operation": "insert_after",
+    "after": "apply_trip_date_override",
+    "step": "remove_client_name_nicknames"
+  },
+  "acceptance_tests_patch": [
+    {
+      "id": "AT-36",
+      "case": "Client Name MATTHEWS,SCOTT  (MICHAEL)",
+      "expected": {
+        "Last Name": "MATTHEWS",
+        "First Name": "SCOTT",
+        "Booking Notes": "ends with Nickname: MICHAEL"
+      }
+    },
+    {
+      "id": "AT-59",
+      "case": "Nickname between [ ], \" \" or “ ”",
+      "expected": "Removed from the name with its delimiters; Booking Notes gets Nickname: <nickname>"
+    },
+    {
+      "id": "AT-60",
+      "case": "Comments and Space Type LR already fill Booking Notes",
+      "expected": "<Comments>, Lift Required, Nickname: MICHAEL"
+    },
+    {
+      "id": "AT-61",
+      "case": "Client Name DOE,(JANE)",
+      "expected": "Invalid Trips with INVALID_CLIENT_NAME_FORMAT; Invalid Trips keeps the original name"
+    },
+    {
+      "id": "AT-62",
+      "case": "Apostrophe and unmatched delimiter (O'BRIEN,PAT / SMITH,ANN (ANNIE)",
+      "expected": {
+        "O'BRIEN,PAT": "O'BRIEN / PAT, no note",
+        "SMITH,ANN (ANNIE": "SMITH / ANN ANNIE"
+      }
+    }
+  ],
+  "consistency_contract_patch": {
+    "acceptance_test_id_range": "AT-01..AT-62 with no gaps after applying v2.5.0 to v2.8.1"
+  },
+  "acceptance_test_suite": {
+    "rules_version": "2.8.1",
+    "embedded_acceptance_cases": "AT-01 to AT-62"
+  }
+}
