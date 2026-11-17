@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "specification": {
+    "id": "nctd-manifest-parser",
+    "name": "NCTD Manifest Parser",
+    "organization": "North County Transit District",
+    "version": "2.9.0",
+    "status": "production",
+    "target_runtime": "Node.js",
+    "updated": "2026-11-17",
+    "extends": {
+      "file": "nctd_manifest_parser_rules_v2.8.3.json",
+      "version": "2.8.3",
+      "merge_strategy": "deep_merge_by_key",
+      "rule": "All v2.8.3 rules remain active. This version adds a remembered computer for the catalog key and a persistent counter for consecutive Leg ID V2 numbers; parsing does not change."
+    },
+    "description": "v2.9.0 overlay: in database mode the catalog key is typed once per computer (signed cookie, 60 days) and the last consecutive Leg ID V2 number is saved in the catalog table with the result.",
+    "changelog": [
+      {
+        "version": "2.9.0",
+        "date": "2026-11-17",
+        "changes": [
+          "CATALOG-REMEMBER-DEVICE-001: after the catalog key is typed once, the App remembers that computer for 60 days with a signed cookie (HttpOnly, Secure on HTTPS, SameSite=Strict) and connects by itself when opened. Changing CATALOG_ACCESS_KEY in Render invalidates every cookie (decision 2026-11-17).",
+          "Forget this computer removes the cookie.",
+          "Wrong keys are limited: 5 failed attempts per client in 15 minutes, then CATALOG_TOO_MANY_ATTEMPTS.",
+          "LEG-ID-V2-COUNTER-001: the last consecutive Leg ID V2 number is saved in the catalog table (item #LEG_ID_V2_SEQ, never listed as a passenger). Starting value: nothing saved, so the first number is L000001 (decision 2026-11-17).",
+          "Start at is filled with the number after the last one saved; it can still be changed by hand.",
+          "Save to catalog becomes Save result: it saves the new passengers and the Leg ID V2 range. Processing alone does not use up numbers. The button appears when a result has new passengers, corrections or a consecutive range.",
+          "A range is saved only if none of its numbers was saved before; otherwise the App asks to process the file again with the next free number, so no L number is repeated in TOBI.",
+          "Each table keeps its own counter (nctd-passengers-prod in Render, nctd-passengers-stage locally). CSV mode does not keep a counter.",
+          "Added acceptance tests AT-70 to AT-75."
+        ]
+      }
+    ]
+  },
+  "passenger_catalog": {
+    "storage": {
+      "access": {
+        "remember_device": {
+          "rule_id": "CATALOG-REMEMBER-DEVICE-001",
+          "cookie": "nctd_catalog = <expiry ms>.<HMAC-SHA256 signature>; Path=/; HttpOnly; SameSite=Strict; Secure on HTTPS; Max-Age = remember_device_days",
+          "signing_key": "Derived from CATALOG_ACCESS_KEY; the cookie never contains the key. Changing the key invalidates every remembered computer.",
+          "auto_connect": "When the page opens with a valid cookie, the App reads the catalog without asking for the key.",
+          "forget": "Forget this computer deletes the cookie.",
+          "decided_by": "Majo, 2026-11-17"
+        },
+        "remember_device_days": 60,
+        "max_failed_attempts": 5,
+        "lockout_minutes": 15,
+        "too_many_attempts_code": "CATALOG_TOO_MANY_ATTEMPTS",
+        "required_for": [
+          "reading the catalog",
+          "processing a Viajes file",
+          "saving the result",
+          "importing a CSV",
+          "downloading the backup"
+        ]
+      },
+      "write": {
+        "trigger": "Only the Save result button of a processed job, after review (decisions 2026-11-16 and 2026-11-17). Processing alone never writes."
+      }
+    }
+  },
+  "experimental_rules": {
+    "leg_id_v2_counter": {
+      "rule_id": "LEG-ID-V2-COUNTER-001",
+      "applies_when": "Database mode and the Assign consecutive numbers to Leg ID V2 option is on.",
+      "storage": "Item mrn = #LEG_ID_V2_SEQ in the catalog table, attributes last (number), updatedAt, source. Passenger keys contain only letters and digits, so they never collide with it; the item is never listed as a passenger.",
+      "initial_value": "No item = nothing saved; the first suggested number is L000001.",
+      "suggested_start": "Start at = last saved + 1, filled in when the catalog is read and after each save. The user can change it.",
+      "save": "Save result writes last = the job's last number with the condition attribute_not_exists(last) OR last < the job's first number.",
+      "conflict": "If a number of the range was already saved, nothing is written for the counter, the result is marked stale and the App asks to process the file again starting at the next free number.",
+      "per_table": "Each table keeps its own counter: nctd-passengers-prod (Render, TOBI PROD and TOBI Stage tests from Render) and nctd-passengers-stage (local).",
+      "decided_by": "Majo, 2026-11-17"
+    }
+  },
+  "exceptions": {
+    "CATALOG_TOO_MANY_ATTEMPTS": "error"
+  },
+  "acceptance_tests_patch": [
+    {
+      "id": "AT-70",
+      "case": "Type the right key once",
+      "expected": "Cookie nctd_catalog with HttpOnly, SameSite=Strict and Max-Age 60 days; later requests without the key header are accepted; status reports remembered = true"
+    },
+    {
+      "id": "AT-71",
+      "case": "Key changed in Render, tampered or expired cookie, Forget this computer",
+      "expected": "The cookie is no longer accepted (401 CATALOG_KEY_INVALID); Forget this computer deletes it"
+    },
+    {
+      "id": "AT-72",
+      "case": "Five wrong keys from the same client within 15 minutes",
+      "expected": "The sixth attempt gets 429 CATALOG_TOO_MANY_ATTEMPTS, even with the right key"
+    },
+    {
+      "id": "AT-73",
+      "case": "Empty counter; process with consecutive numbers from L000001 and Save result",
+      "expected": "Catalog reports next L000001 before saving and L000101 after saving a 100-trip file"
+    },
+    {
+      "id": "AT-74",
+      "case": "Process without saving; save the same result twice",
+      "expected": "The counter does not move until Save result; the second save writes nothing"
+    },
+    {
+      "id": "AT-75",
+      "case": "Two results use overlapping ranges",
+      "expected": "The first saved range wins; the second is reported stale with the next free number and the counter does not change"
+    }
+  ],
+  "consistency_contract_patch": {
+    "acceptance_test_id_range": "AT-01..AT-75 with no gaps after applying v2.5.0 to v2.9.0"
+  },
+  "acceptance_test_suite": {
+    "rules_version": "2.9.0",
+    "embedded_acceptance_cases": "AT-01 to AT-75"
+  }
+}

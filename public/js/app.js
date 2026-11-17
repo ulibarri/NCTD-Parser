@@ -10,11 +10,6 @@
   // v2.8.3 CATALOG-STORAGE-001: 'csv' (upload) or 'dynamodb' (catalog in the database)
   const CATALOG = JSON.parse($('catalogConfig').textContent);
   const DB = CATALOG.mode !== 'csv';
-  const KEY_ITEM = 'nctdCatalogKey';
-  const session = {
-    get() { try { return window.sessionStorage.getItem(KEY_ITEM) || ''; } catch (e) { return ''; } },
-    set(v) { try { if (v) window.sessionStorage.setItem(KEY_ITEM, v); else window.sessionStorage.removeItem(KEY_ITEM); } catch (e) { /* storage not available */ } },
-  };
 
   const state = {
     lang: document.documentElement.lang || 'es',
@@ -22,8 +17,8 @@
     pasajeros: null,
     changedDate: null, // 'YYYY-MM-DD' once "Cambiar la fecha" was applied
     job: null,
-    catalogKey: '', // database mode: access key (X-Catalog-Key)
-    dbCatalog: null, // database mode: { count } once the catalog was read
+    dbCatalog: null, // database mode: { count, legIdV2 } once the catalog was read
+    rememberedUntil: null, // v2.9.0: this computer is remembered until (ISO)
     messages: {}, // element id -> { key, vars, kind }
   };
 
@@ -45,7 +40,7 @@
     Object.keys(state.messages).forEach(renderMessage);
     renderFileInfo('viajes');
     renderFileInfo('pasajeros');
-    if (DB) $('dbHint').textContent = t('db.hint', { table: CATALOG.table });
+    if (DB) { $('dbHint').textContent = t('db.hint', { table: CATALOG.table }); renderConnection(); }
     if (state.job) { renderSummary(); renderExportStatus(); renderCatalogSave(); updateCount(); }
   }
 
@@ -79,7 +74,6 @@
 
   async function api(url, options) {
     const opts = { ...(options || {}) };
-    if (DB && state.catalogKey) opts.headers = { ...(opts.headers || {}), 'X-Catalog-Key': state.catalogKey };
     const res = await fetch(url, opts);
     const body = await res.json().catch(() => ({ error: 'INTERNAL' }));
     if (!res.ok) throw body;
@@ -300,29 +294,53 @@
   });
 
   // ---------- catalog in the database (CATALOG-STORAGE-001) ----------
+  // v2.9.0 CATALOG-REMEMBER-DEVICE-001: the key is typed once; the server
+  // remembers this computer with an HttpOnly cookie, so the browser never
+  // keeps the key itself.
+  function fmtDay(iso) {
+    if (!iso) return '';
+    try { return new Date(iso).toLocaleDateString(state.lang === 'es' ? 'es-MX' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' }); } catch (e) { return iso.slice(0, 10); }
+  }
+
+  function renderConnection() {
+    if (!DB) return;
+    const connected = Boolean(state.dbCatalog);
+    $('dbKeyForm').hidden = connected;
+    $('dbSession').hidden = !connected;
+    $('dbTools').hidden = !connected;
+    if (connected) $('dbSessionText').textContent = t('db.remembered', { date: fmtDay(state.rememberedUntil) });
+  }
+
   function disconnectCatalog() {
-    state.catalogKey = '';
     state.dbCatalog = null;
-    session.set('');
-    $('dbTools').hidden = true;
+    state.rememberedUntil = null;
+    renderConnection();
     renderFileInfo('pasajeros');
     updateProcessButton();
+  }
+
+  // v2.9.0 LEG-ID-V2-COUNTER-001: Start at = last saved number + 1.
+  function suggestSequenceStart() {
+    const info = state.dbCatalog && state.dbCatalog.legIdV2;
+    if (!info) return;
+    $('legIdV2Start').value = String(info.next);
+    updateSequencePreview();
   }
 
   async function loadCatalog(quiet) {
     if (!quiet) setMessage('pasajerosStatus', 'db.loading');
     try {
       const body = await api('/api/catalog');
-      state.dbCatalog = { count: body.rowCount };
-      session.set(state.catalogKey);
+      state.dbCatalog = { count: body.rowCount, legIdV2: body.legIdV2 };
       await setGrid(grids.pasajeros, body.columns, body.rows);
-      $('dbTools').hidden = false;
+      suggestSequenceStart();
       if (!quiet) setMessage('pasajerosStatus', 'db.connected', { count: body.rowCount }, 'ok');
     } catch (err) {
       const m = errorMessage(err);
       setMessage('pasajerosStatus', m.key, m.vars, 'error');
       if (err && err.error === 'CATALOG_KEY_INVALID') disconnectCatalog();
     }
+    renderConnection();
     renderFileInfo('pasajeros');
     updateProcessButton();
   }
@@ -333,14 +351,36 @@
     return m ? m[1] : fallback;
   }
 
+  const catalogError = (err, target) => {
+    const m = errorMessage(err);
+    setMessage(target, m.key, m.vars, 'error');
+    if (err && err.error === 'CATALOG_KEY_INVALID') disconnectCatalog();
+  };
+
   if (DB) {
     $('dbKeyForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      state.catalogKey = $('dbKey').value.trim();
+      const key = $('dbKey').value.trim();
       $('dbKey').value = '';
-      if (!state.catalogKey) { setMessage('pasajerosStatus', 'db.needKey', {}, 'error'); return; }
+      if (!key) { setMessage('pasajerosStatus', 'db.needKey', {}, 'error'); return; }
+      $('dbConnectBtn').disabled = true;
+      try {
+        const r = await api('/api/catalog/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
+        state.rememberedUntil = r.rememberedUntil;
+        resetResults();
+        await loadCatalog(false);
+      } catch (err) {
+        catalogError(err, 'pasajerosStatus');
+      }
+      $('dbConnectBtn').disabled = false;
+    });
+
+    $('dbForgetBtn').addEventListener('click', async () => {
+      try { await api('/api/catalog/session', { method: 'DELETE' }); } catch (e) { /* the cookie expires anyway */ }
       resetResults();
-      await loadCatalog(false);
+      disconnectCatalog();
+      await setGrid(grids.pasajeros, [], []);
+      setMessage('pasajerosStatus', 'db.forgotten', {}, 'ok');
     });
 
     $('dbImportFile').addEventListener('change', async (e) => {
@@ -355,16 +395,14 @@
         await loadCatalog(true);
         setMessage('pasajerosStatus', 'db.imported', r, 'ok');
       } catch (err) {
-        const m = errorMessage(err);
-        setMessage('pasajerosStatus', m.key, m.vars, 'error');
-        if (err && err.error === 'CATALOG_KEY_INVALID') disconnectCatalog();
+        catalogError(err, 'pasajerosStatus');
       }
       e.target.value = '';
     });
 
     $('dbBackupBtn').addEventListener('click', async () => {
       try {
-        const res = await fetch('/api/catalog/export', { headers: { 'X-Catalog-Key': state.catalogKey } });
+        const res = await fetch('/api/catalog/export');
         if (!res.ok) throw await res.json().catch(() => ({ error: 'INTERNAL' }));
         const url = URL.createObjectURL(await res.blob());
         const a = document.createElement('a');
@@ -375,8 +413,7 @@
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 10000);
       } catch (err) {
-        const m = errorMessage(err);
-        setMessage('pasajerosStatus', m.key, m.vars, 'error');
+        catalogError(err, 'pasajerosStatus');
       }
     });
 
@@ -391,17 +428,24 @@
         renderCatalogSave();
         await loadCatalog(true);
       } catch (err) {
-        const m = errorMessage(err);
-        setMessage('catalogSaveStatus', m.key, m.vars, 'error');
+        catalogError(err, 'catalogSaveStatus');
         $('catalogSaveBtn').disabled = false;
-        if (err && err.error === 'CATALOG_KEY_INVALID') disconnectCatalog();
       }
     });
 
-    state.catalogKey = session.get();
-    if (state.catalogKey) loadCatalog(false);
-    else setMessage('pasajerosStatus', 'db.needKey');
     $('dbHint').textContent = t('db.hint', { table: CATALOG.table });
+    (async () => {
+      try {
+        const st = await api('/api/catalog/status');
+        if (st.remembered) {
+          state.rememberedUntil = st.rememberedUntil;
+          await loadCatalog(false);
+          return;
+        }
+      } catch (e) { /* show the key form */ }
+      renderConnection();
+      setMessage('pasajerosStatus', 'db.needKey');
+    })();
   }
 
   function renderCatalogSave() {
@@ -409,31 +453,41 @@
     const job = state.job;
     if (!DB || !job || !job.summary.catalogPending) { box.hidden = true; return; }
     box.hidden = false;
-    const { added, changed } = job.summary.catalogPending;
+    const { added, changed, legIdV2 } = job.summary.catalogPending;
     const saved = job.catalogSaved;
     const text = $('catalogSaveText');
     const btn = $('catalogSaveBtn');
     box.className = 'catalog-save';
+    const lines = [];
     if (saved) {
       btn.hidden = true;
+      const seq = saved.legIdV2;
       if (saved.stale) {
         box.classList.add('is-stale');
-        text.textContent = t('save.stale', { count: saved.existed + saved.skipped, ids: (saved.existedIds || []).slice(0, 6).join(', ') });
+        if (saved.saved + saved.updated > 0) lines.push(t('save.done', saved));
+        if (saved.existed + saved.skipped > 0) lines.push(t('save.stale', { count: saved.existed + saved.skipped, ids: (saved.existedIds || []).slice(0, 6).join(', ') }));
+        if (seq && !seq.recorded) lines.push(t('save.seqConflict', seq));
       } else {
         box.classList.add('is-done');
-        text.textContent = saved.alreadySaved ? t('save.already') : t('save.done', saved);
+        lines.push(saved.alreadySaved ? t('save.already') : t('save.done', saved));
+        if (seq && seq.recorded) lines.push(t('save.seqDone', seq));
       }
+      text.textContent = lines.join(' ');
       return;
     }
-    if (added + changed === 0) {
+    if (added + changed === 0 && !legIdV2) {
       box.classList.add('is-done');
       btn.hidden = true;
       text.textContent = t('save.none');
       return;
     }
+    if (added + changed > 0) lines.push(t('save.pending', { added, changed }));
+    if (legIdV2) lines.push(t(legIdV2.overlaps ? 'save.seqOverlap' : 'save.seqPending', { first: legIdV2.first, last: legIdV2.last, stored: 'L' + String(legIdV2.storedLast).padStart(6, '0') }));
+    lines.push(t('save.beforeTobi'));
+    if (legIdV2 && legIdV2.overlaps) box.classList.add('is-stale');
     btn.hidden = false;
     btn.disabled = false;
-    text.textContent = t('save.pending', { added, changed });
+    text.textContent = lines.join(' ');
   }
 
   // ---------- results ----------

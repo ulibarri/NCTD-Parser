@@ -67,12 +67,16 @@
 <% } else { %>
           <!-- v2.8.3 CATALOG-STORAGE-001: catalog in the database -->
           <p class="hint db-hint" id="dbHint"><%= t('db.hint').replace('{table}', catalogTable) %></p>
-          <form class="db-key-row" id="dbKeyForm" autocomplete="off">
+          <form class="db-key-row" id="dbKeyForm" autocomplete="off" hidden>
             <label for="dbKey"><span data-i18n="db.key"><%= t('db.key') %></span>
               <input type="password" id="dbKey" autocomplete="current-password" />
             </label>
             <button type="submit" id="dbConnectBtn" class="btn-primary" data-i18n="db.connect"><%= t('db.connect') %></button>
           </form>
+          <div class="db-session" id="dbSession" hidden>
+            <span id="dbSessionText"></span>
+            <button type="button" id="dbForgetBtn" class="link-button" data-i18n="db.forget"><%= t('db.forget') %></button>
+          </div>
           <div class="db-tools" id="dbTools" hidden>
             <label>
               <span data-i18n="db.import"><%= t('db.import') %></span>

@@ -18,6 +18,9 @@ function createApp({ rules = loadRules(), catalogStore = storeFromEnv(), accessK
   const jobs = new TtlStore(RESULT_TTL_MS);
 
   app.disable('x-powered-by');
+  // Render terminates HTTPS in front of the App: req.secure and req.ip come
+  // from X-Forwarded-Proto / X-Forwarded-For (needed for the Secure cookie).
+  app.set('trust proxy', 1);
   app.set('view engine', 'ejs');
   app.set('views', path.join(__dirname, 'views'));
 

@@ -1,6 +1,6 @@
 # NCTD Manifest Parser
 
-WebApp en Node.js y Express que convierte el manifiesto de viajes de North County Transit District ("Viajes") en el CSV de importación de TOBI ("Output"). Aplica las reglas de `config/rules/nctd_manifest_parser_rules_v2.8.3.json`. Es una cadena de capas: v2.8.3 → v2.8.2 → v2.8.1 → v2.8.0 → v2.7.1 → v2.7.0 → v2.6.0 → v2.5.0. La App carga la v2.5.0 y le aplica en orden los cambios de cada capa. Por eso las ocho versiones deben estar en `config/rules/`.
+WebApp en Node.js y Express que convierte el manifiesto de viajes de North County Transit District ("Viajes") en el CSV de importación de TOBI ("Output"). Aplica las reglas de `config/rules/nctd_manifest_parser_rules_v2.9.0.json`. Es una cadena de capas: v2.9.0 → v2.8.3 → v2.8.2 → v2.8.1 → v2.8.0 → v2.7.1 → v2.7.0 → v2.6.0 → v2.5.0. La App carga la v2.5.0 y le aplica en orden los cambios de cada capa. Por eso las nueve versiones deben estar en `config/rules/`.
 
 ## Requisitos
 
@@ -44,14 +44,16 @@ Sin variables de entorno la App funciona como siempre: el catálogo es el CSV qu
 | `CATALOG_TABLE` | `nctd-passengers-prod` en Render, `nctd-passengers-stage` para pruebas |
 | `AWS_REGION` | `us-east-2` (Ohio, donde están las tablas) |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Llave del usuario de IAM de esa tabla |
-| `CATALOG_ACCESS_KEY` | Clave que se escribe en la App para leer o cambiar el catálogo |
+| `CATALOG_ACCESS_KEY` | Clave que se escribe en la App para leer o cambiar el catálogo. Cambiarla desconecta todos los equipos recordados |
 
 Sin `CATALOG_ACCESS_KEY` la App no arranca en modo base de datos, porque la URL es pública. Para trabajar en tu computadora copia `.env.example` a `.env` (no se sube a git) y usa `npm run dev:db`.
 
 Cómo funciona:
 
 - Al procesar, la App lee toda la tabla y la aplica igual que un catálogo subido (CATALOG-001, con sus migraciones).
-- Procesar no escribe nada. Después de revisar el resultado, el botón **Guardar en catálogo** escribe los pasajeros nuevos. Hazlo antes de llevar el Output a TOBI.
+- **Equipo recordado (v2.9.0, CATALOG-REMEMBER-DEVICE-001):** la clave se escribe una sola vez por computadora. El servidor deja una cookie firmada (HttpOnly, SameSite=Strict, Secure en HTTPS) que dura 60 días, y la App se conecta sola al abrirla. "Olvidar este equipo" la borra. La cookie no contiene la clave. Después de 5 claves incorrectas desde el mismo equipo hay que esperar 15 minutos.
+- Procesar no escribe nada. Después de revisar el resultado, el botón **Guardar resultado** escribe los pasajeros nuevos y, si se usó la numeración consecutiva, el último Leg ID V2. Hazlo antes de llevar el Output a TOBI.
+- **Contador de Leg ID V2 (v2.9.0, LEG-ID-V2-COUNTER-001):** el último número consecutivo guardado vive en la misma tabla (registro `#LEG_ID_V2_SEQ`, que nunca aparece como pasajero). "Iniciar en" se llena solo con el número siguiente. Si un rango se encima con números ya guardados, no se registra y la App pide reprocesar desde el número libre, para que TOBI nunca reciba un L repetido. Cada tabla lleva su propio contador.
 - Cada pasajero se escribe con una condición (`attribute_not_exists`): si el MRN ya existe, nunca se sobrescribe. Si otro proceso guardó el mismo pasajero mientras revisabas, la App lo avisa y pide volver a procesar.
 - **Importar un CSV:** carga un `NCTD_Passengers_<AAAAMMDD>_UPDTD.csv` a la tabla (se usa para la carga inicial). Aplica las migraciones; los MRN que ya están se conservan.
 - **Descargar respaldo:** exporta toda la tabla como CSV. La descarga "Pasajeros actualizado" de cada proceso también sigue.
@@ -91,7 +93,8 @@ src/parser/pipeline.js         Validación, duplicados, emparejamiento A/B, Vend
 src/parser/fields.js           Reglas por campo (nombre, MRN, direcciones, teléfonos, tags, etc.)
 src/parser/dates.js            Fechas y horas
 src/parser/pasajeros.js        Catálogo maestro de Pasajeros
-src/catalog-store.js           Catálogo en DynamoDB (o en memoria para pruebas)
+src/catalog-store.js           Catálogo en DynamoDB (o en memoria para pruebas) y contador de Leg ID V2
+src/catalog-session.js         Equipo recordado (cookie firmada) y límite de intentos
 src/parser/csv-export.js       CSV con BOM UTF-8
 src/routes/api.js              API REST
 locales/                       Textos en español e inglés
@@ -116,7 +119,9 @@ test/                          Pruebas (fixtures/ contiene la matriz TC v2.0)
 | GET | `/api/catalog` | Catálogo de la base de datos (encabezado `X-Catalog-Key`) |
 | POST | `/api/catalog/import` | Importa un CSV de Pasajeros a la base de datos (campo `file`, `X-Catalog-Key`) |
 | GET | `/api/catalog/export` | Respaldo CSV de la base de datos (`X-Catalog-Key`) |
-| POST | `/api/jobs/:jobId/catalog` | Guarda en la base de datos los pasajeros nuevos del proceso (`X-Catalog-Key`) |
+| POST | `/api/jobs/:jobId/catalog` | Guarda el resultado: pasajeros nuevos y rango de Leg ID V2 (`X-Catalog-Key` o cookie) |
+| POST | `/api/catalog/session` | `{ key }` recuerda este equipo 60 días (cookie `nctd_catalog`) |
+| DELETE | `/api/catalog/session` | Olvida este equipo |
 | GET | `/healthz` | Estado, versión de reglas y modo del catálogo |
 
 ## Notas
@@ -134,4 +139,4 @@ test/                          Pruebas (fixtures/ contiene la matriz TC v2.0)
 - **Client Name (regla CLIENT-NAME-FORMAT-001, v2.4.0):** debe venir como `APELLIDO,NOMBRE`. Si no trae coma, o le falta el apellido o el nombre, la fila va a Invalid Trips con `INVALID_CLIENT_NAME_FORMAT` y el resto del archivo se exporta normal.
 - **Acompañantes (PCA, COM, COMP; reglas v2.3.0, reemplazadas por la v2.7.0):** el First Name se deja tal cual, sin `" - PCA"`, y el Last Name termina en `" COMPANION"` una sola vez. `PCA` se conserva solo en Tobi MRN, Vendor ID y Leg ID (`PCAA`/`PCAB`). Si el manifiesto o un catálogo anterior trae `"DEANNE - PCA"`, se corrige a `DEANNE` (migración CATALOG-PCA-FIRSTNAME-MIGRATION-001) y el resumen muestra cuántos acompañantes se corrigieron.
 - **Lectura de XLSX:** se usa ExcelJS. SheetJS no se usa porque la versión publicada en npm (0.18.5) tiene vulnerabilidades sin corregir.
-- **Sin autenticación de usuarios:** pensada para uso interno. En modo base de datos, leer o cambiar el catálogo y procesar piden la clave `CATALOG_ACCESS_KEY`; en modo CSV no hay clave.
+- **Sin autenticación de usuarios:** pensada para uso interno. En modo base de datos, leer o cambiar el catálogo y procesar piden la clave `CATALOG_ACCESS_KEY` (o la cookie de un equipo recordado); en modo CSV no hay clave.

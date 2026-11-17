@@ -48,7 +48,7 @@ const seed = () => createMemoryStore({
 });
 
 test('rules: v2.8.3 catalog storage', () => {
-  assert.equal(rules.specification.version, '2.8.3');
+  assert.ok(rules.specification.changelog.some((c) => c.version === '2.8.3'));
   const s = rules.passenger_catalog.storage;
   assert.equal(s.rule_id, 'CATALOG-STORAGE-001');
   assert.deepEqual(s.tables, { prod: 'nctd-passengers-prod', stage: 'nctd-passengers-stage' });
@@ -60,7 +60,7 @@ test('AT-65 database mode: the catalog comes from the table and processing write
   const store = seed();
   await withApp(store, async ({ call, process }) => {
     const status = await call('/catalog/status', { key: '' });
-    assert.deepEqual(status.data, { mode: 'memory', table: 'nctd-passengers-stage', keyRequired: true });
+    assert.deepEqual(status.data, { mode: 'memory', table: 'nctd-passengers-stage', keyRequired: true, remembered: false, rememberedUntil: null, rememberDays: 60 });
     const r = await process([
       row({ 'Client Name': 'DOE ,JANIE', Comments: 'CELL 858-555-0199' }),
       row({ 'Client ID': '2002', 'Client Name': 'ROE,JOHN', PUTime: '09:00' }),
@@ -71,7 +71,7 @@ test('AT-65 database mode: the catalog comes from the table and processing write
     assert.equal(byMrn['1001']['Primary Phone'], '7605550101');
     assert.equal(byMrn['2002']['Primary Phone'], '8584020500');
     assert.equal(r.data.summary.catalogMatched, 1);
-    assert.deepEqual(r.data.summary.catalogPending, { added: 1, changed: 0 });
+    assert.deepEqual(r.data.summary.catalogPending, { added: 1, changed: 0, legIdV2: null });
     assert.equal(r.data.summary.catalogTable, 'nctd-passengers-stage');
     assert.ok(!r.data.exceptions.some((e) => e.code === 'NO_PASSENGER_CATALOG'));
     assert.equal(store.data.size, 1);
@@ -96,7 +96,7 @@ test('AT-66 save to catalog writes the new passengers once', async () => {
     const day2 = await process([row({ 'Client ID': '2002', 'Client Name': 'ROE,JOHNNY', 'Passenger Ty': 'PCA', Comments: 'C: 760-555-0110' })]);
     assert.equal(day2.data.rows[0]['First Name'], 'JOHN-PCA');
     assert.equal(day2.data.rows[0]['Primary Phone'], '8584020500');
-    assert.deepEqual(day2.data.summary.catalogPending, { added: 0, changed: 0 });
+    assert.deepEqual(day2.data.summary.catalogPending, { added: 0, changed: 0, legIdV2: null });
     const backup = await call('/catalog/export');
     assert.match(backup.data, /^First Name,Last Name,MRN Number,Telephone\r?\n/);
     assert.match(backup.data, /JOHN-PCA,ROE,2002PCA,8584020500/);
@@ -143,7 +143,7 @@ test('AT-68b a catalog migration updates the stored item only through Save to ca
   const store = createMemoryStore({ items: [{ mrn: '1001PCA', firstName: 'JANE', lastName: 'DOE COMPANION', mrnNumber: '1001PCA', telephone: '9876543210', addedAt: '2026-11-01T00:00:00.000Z', ord: 0 }] });
   await withApp(store, async ({ call, process }) => {
     const r = await process([row({ 'Passenger Ty': 'PCA' })]);
-    assert.deepEqual(r.data.summary.catalogPending, { added: 0, changed: 1 });
+    assert.deepEqual(r.data.summary.catalogPending, { added: 0, changed: 1, legIdV2: null });
     assert.equal(r.data.rows[0]['First Name'], 'JANE-PCA');
     assert.equal(store.data.get('1001PCA').lastName, 'DOE COMPANION');
     const s = await call(`/jobs/${r.data.jobId}/catalog`, { method: 'POST' });
@@ -177,7 +177,7 @@ test('CSV mode is unchanged: no key, catalog endpoints disabled', async () => {
   await new Promise((r) => server.once('listening', r));
   const base = `http://127.0.0.1:${server.address().port}/api`;
   try {
-    assert.deepEqual(await (await fetch(`${base}/catalog/status`)).json(), { mode: 'csv', table: null, keyRequired: false });
+    assert.deepEqual(await (await fetch(`${base}/catalog/status`)).json(), { mode: 'csv', table: null, keyRequired: false, remembered: false, rememberedUntil: null, rememberDays: 60 });
     assert.equal((await fetch(`${base}/catalog`)).status, 404);
   } finally {
     server.close();

@@ -212,3 +212,9 @@ a.secondary[role=button]:hover { background: rgba(1, 92, 171, .08); }
 .catalog-save .status { margin: .5rem 0 0; font-weight: 400; }
 .catalog-save .status:empty { display: none; }
 .catalog-save button { margin: 0; width: auto; }
+
+/* v2.9.0: remembered computer */
+.db-session { display: flex; flex-wrap: wrap; gap: .25rem .75rem; align-items: baseline; margin: 0 0 .5rem; font-size: .9rem; color: var(--pico-muted-color); }
+.db-session .link-button { padding: 0; margin: 0; width: auto; border: 0; background: none; color: var(--pico-primary); text-decoration: underline; font-size: .9rem; cursor: pointer; }
+.db-session .link-button:focus-visible { outline: 2px solid var(--pico-primary); outline-offset: 2px; }
+.db-key-row[hidden], .db-tools[hidden], .db-session[hidden] { display: none !important; }

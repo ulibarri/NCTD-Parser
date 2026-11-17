@@ -14,6 +14,15 @@
 // item still holds the values the migration was computed from.
 
 const PASAJEROS_COLUMNS = ['First Name', 'Last Name', 'MRN Number', 'Telephone'];
+// v2.9.0 LEG-ID-V2-COUNTER-001: last consecutive Leg ID V2 number saved, kept
+// in the same table. Passenger keys are letters and digits only, so a key
+// that starts with # can never be a passenger.
+const COUNTER_KEY = '#LEG_ID_V2_SEQ';
+const isPassenger = (item) => item && typeof item.mrn === 'string' && item.mrn && !item.mrn.startsWith('#');
+const counterOf = (items) => {
+  const c = items.find((i) => i && i.mrn === COUNTER_KEY);
+  return c && Number.isInteger(Number(c.last)) ? Number(c.last) : 0;
+};
 const FIELDS = { 'First Name': 'firstName', 'Last Name': 'lastName', 'MRN Number': 'mrnNumber', Telephone: 'telephone' };
 
 const { keyOf } = require('./parser/pasajeros');
@@ -94,8 +103,35 @@ function createDynamoStore({ client, table, commands }) {
     kind: 'dynamodb',
     table,
 
+    /** Passengers in catalog order and the last Leg ID V2 number saved (0 = none). */
+    async snapshot() {
+      const items = await scanAll();
+      return { rows: items.filter(isPassenger).sort(byAdded).map(toRow), legIdV2Last: counterOf(items) };
+    },
+
     async list() {
-      return (await scanAll()).filter((i) => i.mrn).sort(byAdded).map(toRow);
+      return (await this.snapshot()).rows;
+    },
+
+    /**
+     * Saves the last number of a consecutive Leg ID V2 range. Refused when a
+     * number of the range was already saved (stored last >= first).
+     */
+    async recordLegIdV2({ first, last, source }) {
+      try {
+        await client.send(new UpdateCommand({
+          TableName: table,
+          Key: { mrn: COUNTER_KEY },
+          UpdateExpression: 'SET #last = :last, #updatedAt = :now, #source = :source',
+          ConditionExpression: 'attribute_not_exists(#last) OR #last < :first',
+          ExpressionAttributeNames: { '#last': 'last', '#updatedAt': 'updatedAt', '#source': 'source' },
+          ExpressionAttributeValues: { ':last': last, ':first': first, ':now': new Date().toISOString(), ':source': String(source || '') },
+        }));
+        return { recorded: true };
+      } catch (err) {
+        if (!isConditionFailure(err)) throw err;
+        return { recorded: false };
+      }
     },
 
     /** Conditional put: a passenger that already exists is never overwritten. */
@@ -164,8 +200,18 @@ function createMemoryStore({ table = 'memory', items = [] } = {}) {
     kind: 'memory',
     table,
     data,
+    async snapshot() {
+      const items = [...data.values()];
+      return { rows: items.filter(isPassenger).sort(byAdded).map(toRow), legIdV2Last: counterOf(items) };
+    },
     async list() {
-      return [...data.values()].sort(byAdded).map(toRow);
+      return (await this.snapshot()).rows;
+    },
+    async recordLegIdV2({ first, last, source }) {
+      const stored = counterOf([data.get(COUNTER_KEY)]);
+      if (data.has(COUNTER_KEY) && !(stored < first)) return { recorded: false };
+      data.set(COUNTER_KEY, { mrn: COUNTER_KEY, last, updatedAt: new Date().toISOString(), source: String(source || '') });
+      return { recorded: true };
     },
     async addNew(rows, { source } = {}) {
       last = Math.max(Date.now(), last + 1); // strictly increasing, like separate saves
@@ -220,4 +266,4 @@ function storeFromEnv(env = process.env) {
   return createDynamoStore({ client, table, commands: lib });
 }
 
-module.exports = { storeFromEnv, createDynamoStore, createMemoryStore, diffCatalog, asTable, keyOf, PASAJEROS_COLUMNS };
+module.exports = { COUNTER_KEY, storeFromEnv, createDynamoStore, createMemoryStore, diffCatalog, asTable, keyOf, PASAJEROS_COLUMNS };

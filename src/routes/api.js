@@ -6,7 +6,7 @@ const { readTable, IngestionError } = require('../parser/ingestion');
 const { processViajes, distinctTripDates, applyTripDateOverride, ProcessingError, parseSequenceStart } = require('../parser/pipeline');
 const { PASAJEROS_COLUMNS, applyCatalog, keyOf } = require('../parser/pasajeros');
 const { asTable, diffCatalog } = require('../catalog-store');
-const crypto = require('node:crypto');
+const session = require('../catalog-session');
 const { toCsv, outputName } = require('../parser/csv-export');
 const D = require('../parser/dates');
 const F = require('../parser/fields');
@@ -39,6 +39,8 @@ function viajesRequiredColumns(rules) {
   ])];
 }
 
+const seqLabel = (n) => `L${String(n).padStart(6, '0')}`;
+
 /** Catalog rows with the canonical column names (uploaded headers may differ in case). */
 function canonicalRows(pas, columns) {
   return pas.rows.map((r) => Object.fromEntries(PASAJEROS_COLUMNS.map((c) => [c, String(r[pas.headers[columns.indexOf(c)]] ?? '')])));
@@ -48,13 +50,24 @@ function createApiRouter({ rules, uploads, jobs, catalogStore = null, accessKey 
   const router = express.Router();
 
   // CATALOG-STORAGE-001: in database mode every request that reads or changes
-  // the catalog carries the access key (header X-Catalog-Key).
-  const keyBuf = Buffer.from(String(accessKey));
+  // the catalog needs the access key: the X-Catalog-Key header or, since
+  // v2.9.0 (CATALOG-REMEMBER-DEVICE-001), the signed cookie of a remembered
+  // computer. Wrong keys are limited per client.
+  const access = (rules.passenger_catalog.storage && rules.passenger_catalog.storage.access) || {};
+  const rememberDays = Number(access.remember_device_days) || 60;
+  const limiter = session.createAttemptLimiter({ max: Number(access.max_failed_attempts) || 5, windowMs: (Number(access.lockout_minutes) || 15) * 60 * 1000 });
+  const clientOf = (req) => req.ip || 'unknown';
+  const cookieExpiry = (req) => session.verifyToken(session.readCookie(req), accessKey);
   const requireKey = (req, res, next) => {
     if (!catalogStore) return next();
-    const given = Buffer.from(String(req.get('X-Catalog-Key') || ''));
-    const ok = keyBuf.length > 0 && given.length === keyBuf.length && crypto.timingSafeEqual(given, keyBuf);
-    return ok ? next() : next(new ApiError(401, 'CATALOG_KEY_INVALID'));
+    if (cookieExpiry(req)) return next();
+    const header = req.get('X-Catalog-Key');
+    if (header !== undefined) {
+      if (limiter.blocked(clientOf(req))) return next(new ApiError(429, 'CATALOG_TOO_MANY_ATTEMPTS'));
+      if (session.safeEqual(header, accessKey)) return next();
+      limiter.fail(clientOf(req));
+    }
+    return next(new ApiError(401, 'CATALOG_KEY_INVALID'));
   };
   const storeCall = async (fn) => {
     try {
@@ -140,14 +153,52 @@ function createApiRouter({ rules, uploads, jobs, catalogStore = null, accessKey 
 
   // ---------- catalog in the database (CATALOG-STORAGE-001) ----------
   router.get('/catalog/status', (req, res) => {
-    res.json({ mode: catalogStore ? catalogStore.kind : 'csv', table: catalogStore ? catalogStore.table : null, keyRequired: Boolean(catalogStore) });
+    const exp = catalogStore ? cookieExpiry(req) : null;
+    res.json({
+      mode: catalogStore ? catalogStore.kind : 'csv',
+      table: catalogStore ? catalogStore.table : null,
+      keyRequired: Boolean(catalogStore),
+      remembered: Boolean(exp),
+      rememberedUntil: exp ? new Date(exp).toISOString() : null,
+      rememberDays,
+    });
   });
+
+  // Typing the key once remembers this computer for remember_device_days.
+  router.post('/catalog/session', express.json(), (req, res, next) => {
+    try {
+      if (!catalogStore) throw new ApiError(404, 'CATALOG_STORE_DISABLED');
+      const ip = clientOf(req);
+      if (limiter.blocked(ip)) throw new ApiError(429, 'CATALOG_TOO_MANY_ATTEMPTS');
+      const key = String((req.body && req.body.key) || '');
+      if (!session.safeEqual(key, accessKey)) {
+        limiter.fail(ip);
+        throw new ApiError(401, 'CATALOG_KEY_INVALID');
+      }
+      limiter.reset(ip);
+      const { token, expiresAt } = session.createToken(accessKey, rememberDays);
+      res.setHeader('Set-Cookie', session.cookieHeader(req, token, rememberDays * 24 * 60 * 60));
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ remembered: true, rememberedUntil: new Date(expiresAt).toISOString() });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.delete('/catalog/session', (req, res) => {
+    res.setHeader('Set-Cookie', session.cookieHeader(req, '', 0));
+    res.json({ remembered: false });
+  });
+
+  const legIdV2Info = (last) => ({ last, lastLabel: last ? seqLabel(last) : null, next: last + 1, nextLabel: seqLabel(last + 1) });
 
   router.get('/catalog', requireKey, async (req, res, next) => {
     try {
       if (!catalogStore) throw new ApiError(404, 'CATALOG_STORE_DISABLED');
-      const rows = await storeCall(() => catalogStore.list());
-      res.json({ table: catalogStore.table, columns: PASAJEROS_COLUMNS, rows, rowCount: rows.length });
+      const snap = await storeCall(() => catalogStore.snapshot());
+      const { rows } = snap;
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ table: catalogStore.table, columns: PASAJEROS_COLUMNS, rows, rowCount: rows.length, legIdV2: legIdV2Info(snap.legIdV2Last) });
     } catch (err) {
       next(err);
     }
@@ -209,7 +260,8 @@ function createApiRouter({ rules, uploads, jobs, catalogStore = null, accessKey 
       const viajes = getUpload(body.viajesUploadId, 'viajes');
       // In database mode the catalog always comes from the database.
       const pasajeros = !catalogStore && body.pasajerosUploadId ? getUpload(body.pasajerosUploadId, 'pasajeros') : null;
-      const catalogBefore = catalogStore ? await storeCall(() => catalogStore.list()) : null;
+      const snap = catalogStore ? await storeCall(() => catalogStore.snapshot()) : null;
+      const catalogBefore = snap ? snap.rows : null;
       const catalogTable = catalogStore ? asTable(catalogBefore) : pasajeros && pasajeros.table;
       let overrideDate = null;
       if (body.newTripDate) {
@@ -241,10 +293,17 @@ function createApiRouter({ rules, uploads, jobs, catalogStore = null, accessKey 
       let catalogJob = null;
       if (catalogStore) {
         const diff = diffCatalog(catalogBefore, canonicalRows(pas, PASAJEROS_COLUMNS));
-        catalogJob = { diff, saved: null, source: viajes.filename };
+        // v2.9.0 LEG-ID-V2-COUNTER-001: the consecutive range is saved with the result.
+        const seq = summary.legIdV2Sequence;
+        const range = seq && seq.first ? { first: seq.start, last: seq.nextStart - 1 } : null;
+        catalogJob = { diff, saved: null, source: viajes.filename, range };
         summary.catalogMode = catalogStore.kind;
         summary.catalogTable = catalogStore.table;
-        summary.catalogPending = { added: diff.added.length, changed: diff.changed.length };
+        summary.catalogPending = {
+          added: diff.added.length,
+          changed: diff.changed.length,
+          legIdV2: range ? { first: seqLabel(range.first), last: seqLabel(range.last), overlaps: range.first <= snap.legIdV2Last, storedLast: snap.legIdV2Last } : null,
+        };
       }
       const jobId = jobs.add({ files, destinationRows: result.destinationRows, columns: result.destinationColumns, summary, catalog: catalogJob });
 
@@ -263,17 +322,24 @@ function createApiRouter({ rules, uploads, jobs, catalogStore = null, accessKey 
       const job = getJob(req.params.jobId);
       if (!job.catalog) throw new ApiError(404, 'JOB_NOT_FOUND');
       if (job.catalog.saved) return res.json({ ...job.catalog.saved, alreadySaved: true });
-      const { diff, source } = job.catalog;
+      const { diff, source, range } = job.catalog;
       const added = await storeCall(() => catalogStore.addNew(diff.added, { source }));
       const changes = await storeCall(() => catalogStore.applyChanges(diff.changed));
+      const counter = range ? await storeCall(() => catalogStore.recordLegIdV2({ ...range, source })) : null;
       const saved = {
         saved: added.saved.length,
         existed: added.existed.length,
         updated: changes.updated.length,
         skipped: changes.skipped.length,
         existedIds: added.existed.map((r) => r['MRN Number']),
+        legIdV2: range ? { recorded: counter.recorded, first: seqLabel(range.first), last: seqLabel(range.last), nextLabel: seqLabel(range.last + 1) } : null,
       };
-      saved.stale = saved.existed > 0 || saved.skipped > 0;
+      if (range && !counter.recorded) {
+        const snapNow = await storeCall(() => catalogStore.snapshot());
+        saved.legIdV2.storedLast = seqLabel(snapNow.legIdV2Last);
+        saved.legIdV2.nextLabel = seqLabel(snapNow.legIdV2Last + 1);
+      }
+      saved.stale = saved.existed > 0 || saved.skipped > 0 || Boolean(range && !counter.recorded);
       job.catalog.saved = saved;
       res.json(saved);
     } catch (err) {
