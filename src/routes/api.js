@@ -4,7 +4,9 @@ const express = require('express');
 const multer = require('multer');
 const { readTable, IngestionError } = require('../parser/ingestion');
 const { processViajes, distinctTripDates, applyTripDateOverride, ProcessingError, parseSequenceStart } = require('../parser/pipeline');
-const { PASAJEROS_COLUMNS } = require('../parser/pasajeros');
+const { PASAJEROS_COLUMNS, applyCatalog, keyOf } = require('../parser/pasajeros');
+const { asTable, diffCatalog } = require('../catalog-store');
+const crypto = require('node:crypto');
 const { toCsv, outputName } = require('../parser/csv-export');
 const D = require('../parser/dates');
 const F = require('../parser/fields');
@@ -37,8 +39,31 @@ function viajesRequiredColumns(rules) {
   ])];
 }
 
-function createApiRouter({ rules, uploads, jobs }) {
+/** Catalog rows with the canonical column names (uploaded headers may differ in case). */
+function canonicalRows(pas, columns) {
+  return pas.rows.map((r) => Object.fromEntries(PASAJEROS_COLUMNS.map((c) => [c, String(r[pas.headers[columns.indexOf(c)]] ?? '')])));
+}
+
+function createApiRouter({ rules, uploads, jobs, catalogStore = null, accessKey = '' }) {
   const router = express.Router();
+
+  // CATALOG-STORAGE-001: in database mode every request that reads or changes
+  // the catalog carries the access key (header X-Catalog-Key).
+  const keyBuf = Buffer.from(String(accessKey));
+  const requireKey = (req, res, next) => {
+    if (!catalogStore) return next();
+    const given = Buffer.from(String(req.get('X-Catalog-Key') || ''));
+    const ok = keyBuf.length > 0 && given.length === keyBuf.length && crypto.timingSafeEqual(given, keyBuf);
+    return ok ? next() : next(new ApiError(401, 'CATALOG_KEY_INVALID'));
+  };
+  const storeCall = async (fn) => {
+    try {
+      return await fn();
+    } catch (err) {
+      console.error('[catalog-store]', err && err.name, err && err.message);
+      throw new ApiError(503, 'CATALOG_STORE_UNAVAILABLE', { reason: err && err.name });
+    }
+  };
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_BYTES, files: 1 } });
   const single = (req, res, next) => upload.single('file')(req, res, (err) => {
     if (!err) return next();
@@ -113,11 +138,79 @@ function createApiRouter({ rules, uploads, jobs }) {
     }
   });
 
-  router.post('/jobs', express.json(), async (req, res, next) => {
+  // ---------- catalog in the database (CATALOG-STORAGE-001) ----------
+  router.get('/catalog/status', (req, res) => {
+    res.json({ mode: catalogStore ? catalogStore.kind : 'csv', table: catalogStore ? catalogStore.table : null, keyRequired: Boolean(catalogStore) });
+  });
+
+  router.get('/catalog', requireKey, async (req, res, next) => {
+    try {
+      if (!catalogStore) throw new ApiError(404, 'CATALOG_STORE_DISABLED');
+      const rows = await storeCall(() => catalogStore.list());
+      res.json({ table: catalogStore.table, columns: PASAJEROS_COLUMNS, rows, rowCount: rows.length });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/catalog/export', requireKey, async (req, res, next) => {
+    try {
+      if (!catalogStore) throw new ApiError(404, 'CATALOG_STORE_DISABLED');
+      const rows = await storeCall(() => catalogStore.list());
+      const filename = outputName(null, 'pasajeros_updated', rules.file_contract.output_file_naming, {}, new Date());
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Cache-Control', 'no-store');
+      res.send(toCsv(PASAJEROS_COLUMNS, rows));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Loads a Pasajeros CSV into the database: catalog migrations are applied,
+  // the first row of a repeated MRN wins and existing passengers are kept.
+  router.post('/catalog/import', requireKey, single, async (req, res, next) => {
+    try {
+      if (!catalogStore) throw new ApiError(404, 'CATALOG_STORE_DISABLED');
+      if (!req.file) throw new ApiError(400, 'NO_FILE');
+      const table = await readTable(req.file.buffer, req.file.originalname, {
+        expectedColumns: PASAJEROS_COLUMNS,
+        requiredColumns: PASAJEROS_COLUMNS,
+        allowedExtensions: ['csv'],
+      });
+      const migrated = applyCatalog(table, [], () => 0, rules);
+      const seen = new Set();
+      const rows = canonicalRows(migrated, table.columns).filter((r) => {
+        const k = keyOf(r['MRN Number']);
+        if (!k || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      const { saved, existed } = await storeCall(() => catalogStore.addNew(rows, { source: req.file.originalname }));
+      const invalidPhones = (migrated.exceptions.find((e) => e.code === 'CATALOG_PHONE_INVALID') || {}).count || 0;
+      res.json({
+        filename: req.file.originalname,
+        read: table.rows.length,
+        saved: saved.length,
+        existed: existed.length,
+        duplicates: table.rows.length - rows.length,
+        migrated: migrated.migrated,
+        phonesMigrated: migrated.phonesMigrated,
+        invalidPhones,
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/jobs', requireKey, express.json(), async (req, res, next) => {
     try {
       const body = req.body || {};
       const viajes = getUpload(body.viajesUploadId, 'viajes');
-      const pasajeros = body.pasajerosUploadId ? getUpload(body.pasajerosUploadId, 'pasajeros') : null;
+      // In database mode the catalog always comes from the database.
+      const pasajeros = !catalogStore && body.pasajerosUploadId ? getUpload(body.pasajerosUploadId, 'pasajeros') : null;
+      const catalogBefore = catalogStore ? await storeCall(() => catalogStore.list()) : null;
+      const catalogTable = catalogStore ? asTable(catalogBefore) : pasajeros && pasajeros.table;
       let overrideDate = null;
       if (body.newTripDate) {
         overrideDate = parseNewDate(body.newTripDate);
@@ -130,7 +223,7 @@ function createApiRouter({ rules, uploads, jobs }) {
         if (start === null) return res.status(400).json({ error: 'INVALID_SEQUENCE_START' });
         legIdV2Sequence = { start };
       }
-      const result = await processViajes({ table: viajes.table, rules, overrideDate, catalog: pasajeros && pasajeros.table, legIdV2Mode: body.legIdV2Mode === true, legIdV2Sequence });
+      const result = await processViajes({ table: viajes.table, rules, overrideDate, catalog: catalogTable, legIdV2Mode: body.legIdV2Mode === true, legIdV2Sequence });
       const pas = result.catalog;
 
       // output_file_naming: a changed trip date is reflected in the Output and Invalid Trips names.
@@ -145,10 +238,44 @@ function createApiRouter({ rules, uploads, jobs }) {
         files.invalid = { filename: outputName(viajes.filename, 'invalid_trips', naming, dates), csv: toCsv(result.invalidColumns, result.invalidRows) };
       }
       const { summary } = result;
-      const jobId = jobs.add({ files, destinationRows: result.destinationRows, columns: result.destinationColumns, summary });
+      let catalogJob = null;
+      if (catalogStore) {
+        const diff = diffCatalog(catalogBefore, canonicalRows(pas, PASAJEROS_COLUMNS));
+        catalogJob = { diff, saved: null, source: viajes.filename };
+        summary.catalogMode = catalogStore.kind;
+        summary.catalogTable = catalogStore.table;
+        summary.catalogPending = { added: diff.added.length, changed: diff.changed.length };
+      }
+      const jobId = jobs.add({ files, destinationRows: result.destinationRows, columns: result.destinationColumns, summary, catalog: catalogJob });
 
       const downloads = Object.fromEntries(Object.entries(files).map(([k, f]) => [k, { filename: f.filename, url: `/api/jobs/${jobId}/${k === 'invalid' ? 'invalid-trips' : k}` }]));
       res.json({ jobId, summary, exceptions: result.exceptions, columns: result.destinationColumns, rows: result.destinationRows, downloads });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Saves the job's new passengers (and catalog migrations) in the database.
+  // Saving twice does nothing the second time.
+  router.post('/jobs/:jobId/catalog', requireKey, async (req, res, next) => {
+    try {
+      if (!catalogStore) throw new ApiError(404, 'CATALOG_STORE_DISABLED');
+      const job = getJob(req.params.jobId);
+      if (!job.catalog) throw new ApiError(404, 'JOB_NOT_FOUND');
+      if (job.catalog.saved) return res.json({ ...job.catalog.saved, alreadySaved: true });
+      const { diff, source } = job.catalog;
+      const added = await storeCall(() => catalogStore.addNew(diff.added, { source }));
+      const changes = await storeCall(() => catalogStore.applyChanges(diff.changed));
+      const saved = {
+        saved: added.saved.length,
+        existed: added.existed.length,
+        updated: changes.updated.length,
+        skipped: changes.skipped.length,
+        existedIds: added.existed.map((r) => r['MRN Number']),
+      };
+      saved.stale = saved.existed > 0 || saved.skipped > 0;
+      job.catalog.saved = saved;
+      res.json(saved);
     } catch (err) {
       next(err);
     }

@@ -7,6 +7,14 @@
   const OUTPUT_COLUMNS = JSON.parse($('outputColumns').textContent);
   const FROZEN = ['Vendor ID', 'Leg ID'];
   const SEARCH_FIELDS = ['First Name', 'Last Name', 'Tobi MRN'];
+  // v2.8.3 CATALOG-STORAGE-001: 'csv' (upload) or 'dynamodb' (catalog in the database)
+  const CATALOG = JSON.parse($('catalogConfig').textContent);
+  const DB = CATALOG.mode !== 'csv';
+  const KEY_ITEM = 'nctdCatalogKey';
+  const session = {
+    get() { try { return window.sessionStorage.getItem(KEY_ITEM) || ''; } catch (e) { return ''; } },
+    set(v) { try { if (v) window.sessionStorage.setItem(KEY_ITEM, v); else window.sessionStorage.removeItem(KEY_ITEM); } catch (e) { /* storage not available */ } },
+  };
 
   const state = {
     lang: document.documentElement.lang || 'es',
@@ -14,6 +22,8 @@
     pasajeros: null,
     changedDate: null, // 'YYYY-MM-DD' once "Cambiar la fecha" was applied
     job: null,
+    catalogKey: '', // database mode: access key (X-Catalog-Key)
+    dbCatalog: null, // database mode: { count } once the catalog was read
     messages: {}, // element id -> { key, vars, kind }
   };
 
@@ -35,7 +45,8 @@
     Object.keys(state.messages).forEach(renderMessage);
     renderFileInfo('viajes');
     renderFileInfo('pasajeros');
-    if (state.job) { renderSummary(); renderExportStatus(); updateCount(); }
+    if (DB) $('dbHint').textContent = t('db.hint', { table: CATALOG.table });
+    if (state.job) { renderSummary(); renderExportStatus(); renderCatalogSave(); updateCount(); }
   }
 
   function setMessage(id, key, vars, kind) {
@@ -67,7 +78,9 @@
   }
 
   async function api(url, options) {
-    const res = await fetch(url, options);
+    const opts = { ...(options || {}) };
+    if (DB && state.catalogKey) opts.headers = { ...(opts.headers || {}), 'X-Catalog-Key': state.catalogKey };
+    const res = await fetch(url, opts);
     const body = await res.json().catch(() => ({ error: 'INTERNAL' }));
     if (!res.ok) throw body;
     return body;
@@ -128,6 +141,11 @@
   // ---------- uploads ----------
   function renderFileInfo(kind) {
     const info = $(kind + 'Info');
+    if (kind === 'pasajeros' && DB) {
+      info.dataset.i18nLocked = '1';
+      info.textContent = state.dbCatalog ? t('db.info', { table: CATALOG.table, count: state.dbCatalog.count }) : CATALOG.table;
+      return;
+    }
     const u = state[kind];
     if (!u) {
       delete info.dataset.i18nLocked;
@@ -234,11 +252,11 @@
 
   // ---------- processing ----------
   function updateProcessButton() {
-    $('processBtn').disabled = !state.viajes;
+    $('processBtn').disabled = !state.viajes || (DB && !state.dbCatalog);
   }
 
   function setBusy(busy) {
-    ['viajesFile', 'pasajerosFile', 'processBtn', 'legIdV2Toggle', 'legIdV2SeqToggle'].forEach((id) => { $(id).disabled = busy; });
+    ['viajesFile', 'pasajerosFile', 'processBtn', 'legIdV2Toggle', 'legIdV2SeqToggle', 'dbConnectBtn', 'dbImportFile', 'dbBackupBtn'].forEach((id) => { if ($(id)) $(id).disabled = busy; });
     if (!busy) updateProcessButton();
     $('legIdV2Start').disabled = busy || !$('legIdV2SeqToggle').checked;
     $('section1').setAttribute('aria-busy', busy ? 'true' : 'false');
@@ -262,7 +280,7 @@
     setMessage('processStatus', 's1.processing');
     try {
       const payload = { viajesUploadId: state.viajes.uploadId };
-      if (state.pasajeros) payload.pasajerosUploadId = state.pasajeros.uploadId;
+      if (!DB && state.pasajeros) payload.pasajerosUploadId = state.pasajeros.uploadId;
       if ($('dateToggle').checked && state.changedDate) payload.newTripDate = state.changedDate;
       if ($('legIdV2Toggle').checked) payload.legIdV2Mode = true;
       if ($('legIdV2SeqToggle').checked) {
@@ -276,9 +294,147 @@
     } catch (err) {
       const m = errorMessage(err);
       setMessage('processStatus', m.key, m.vars, 'error');
+      if (err && err.error === 'CATALOG_KEY_INVALID') disconnectCatalog();
     }
     setBusy(false);
   });
+
+  // ---------- catalog in the database (CATALOG-STORAGE-001) ----------
+  function disconnectCatalog() {
+    state.catalogKey = '';
+    state.dbCatalog = null;
+    session.set('');
+    $('dbTools').hidden = true;
+    renderFileInfo('pasajeros');
+    updateProcessButton();
+  }
+
+  async function loadCatalog(quiet) {
+    if (!quiet) setMessage('pasajerosStatus', 'db.loading');
+    try {
+      const body = await api('/api/catalog');
+      state.dbCatalog = { count: body.rowCount };
+      session.set(state.catalogKey);
+      await setGrid(grids.pasajeros, body.columns, body.rows);
+      $('dbTools').hidden = false;
+      if (!quiet) setMessage('pasajerosStatus', 'db.connected', { count: body.rowCount }, 'ok');
+    } catch (err) {
+      const m = errorMessage(err);
+      setMessage('pasajerosStatus', m.key, m.vars, 'error');
+      if (err && err.error === 'CATALOG_KEY_INVALID') disconnectCatalog();
+    }
+    renderFileInfo('pasajeros');
+    updateProcessButton();
+  }
+
+  function filenameOf(res, fallback) {
+    const cd = res.headers.get('Content-Disposition') || '';
+    const m = /filename="([^"]+)"/.exec(cd);
+    return m ? m[1] : fallback;
+  }
+
+  if (DB) {
+    $('dbKeyForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      state.catalogKey = $('dbKey').value.trim();
+      $('dbKey').value = '';
+      if (!state.catalogKey) { setMessage('pasajerosStatus', 'db.needKey', {}, 'error'); return; }
+      resetResults();
+      await loadCatalog(false);
+    });
+
+    $('dbImportFile').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      resetResults();
+      setMessage('pasajerosStatus', 'db.importing');
+      const form = new FormData();
+      form.append('file', file);
+      try {
+        const r = await api('/api/catalog/import', { method: 'POST', body: form });
+        await loadCatalog(true);
+        setMessage('pasajerosStatus', 'db.imported', r, 'ok');
+      } catch (err) {
+        const m = errorMessage(err);
+        setMessage('pasajerosStatus', m.key, m.vars, 'error');
+        if (err && err.error === 'CATALOG_KEY_INVALID') disconnectCatalog();
+      }
+      e.target.value = '';
+    });
+
+    $('dbBackupBtn').addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/catalog/export', { headers: { 'X-Catalog-Key': state.catalogKey } });
+        if (!res.ok) throw await res.json().catch(() => ({ error: 'INTERNAL' }));
+        const url = URL.createObjectURL(await res.blob());
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filenameOf(res, 'NCTD_Passengers.csv');
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      } catch (err) {
+        const m = errorMessage(err);
+        setMessage('pasajerosStatus', m.key, m.vars, 'error');
+      }
+    });
+
+    $('catalogSaveBtn').addEventListener('click', async () => {
+      const job = state.job;
+      if (!job) return;
+      $('catalogSaveBtn').disabled = true;
+      setMessage('catalogSaveStatus', 'save.saving');
+      try {
+        job.catalogSaved = await api(`/api/jobs/${job.jobId}/catalog`, { method: 'POST' });
+        setMessage('catalogSaveStatus', null);
+        renderCatalogSave();
+        await loadCatalog(true);
+      } catch (err) {
+        const m = errorMessage(err);
+        setMessage('catalogSaveStatus', m.key, m.vars, 'error');
+        $('catalogSaveBtn').disabled = false;
+        if (err && err.error === 'CATALOG_KEY_INVALID') disconnectCatalog();
+      }
+    });
+
+    state.catalogKey = session.get();
+    if (state.catalogKey) loadCatalog(false);
+    else setMessage('pasajerosStatus', 'db.needKey');
+    $('dbHint').textContent = t('db.hint', { table: CATALOG.table });
+  }
+
+  function renderCatalogSave() {
+    const box = $('catalogSave');
+    const job = state.job;
+    if (!DB || !job || !job.summary.catalogPending) { box.hidden = true; return; }
+    box.hidden = false;
+    const { added, changed } = job.summary.catalogPending;
+    const saved = job.catalogSaved;
+    const text = $('catalogSaveText');
+    const btn = $('catalogSaveBtn');
+    box.className = 'catalog-save';
+    if (saved) {
+      btn.hidden = true;
+      if (saved.stale) {
+        box.classList.add('is-stale');
+        text.textContent = t('save.stale', { count: saved.existed + saved.skipped, ids: (saved.existedIds || []).slice(0, 6).join(', ') });
+      } else {
+        box.classList.add('is-done');
+        text.textContent = saved.alreadySaved ? t('save.already') : t('save.done', saved);
+      }
+      return;
+    }
+    if (added + changed === 0) {
+      box.classList.add('is-done');
+      btn.hidden = true;
+      text.textContent = t('save.none');
+      return;
+    }
+    btn.hidden = false;
+    btn.disabled = false;
+    text.textContent = t('save.pending', { added, changed });
+  }
 
   // ---------- results ----------
   function resetResults() {
@@ -289,6 +445,8 @@
     $('summary').hidden = true;
     $('exportStatus').hidden = true;
     $('downloads').hidden = true;
+    $('catalogSave').hidden = true;
+    setMessage('catalogSaveStatus', null);
     ['searchInput', 'searchBtn', 'clearBtn'].forEach((id) => { $(id).disabled = true; });
     $('searchInput').value = '';
     $('outputCount').textContent = '';
@@ -314,6 +472,7 @@
     $('section2Hint').hidden = true;
     renderSummary();
     renderExportStatus();
+    renderCatalogSave();
     setDownload('dlOutput', job.downloads.output);
     setDownload('dlPasajeros', job.downloads.pasajeros);
     setDownload('dlInvalid', job.downloads.invalid);
@@ -357,6 +516,7 @@
     const dl = document.createElement('dl');
     const items = [
       ['summary.effectiveTripDate', fmtDate(s.effectiveTripDate), s.dateChanged ? t('summary.dateChanged') : ''],
+      ...(s.catalogMode ? [['summary.catalogSource', t('summary.catalogSource.db'), s.catalogTable]] : []),
       ['summary.rowsRead', s.rowsRead],
       ['summary.validRows', s.validRows],
       ['summary.invalidRows', s.invalidRows],
@@ -457,6 +617,6 @@
 
   // ---------- wiring ----------
   $('viajesFile').addEventListener('change', (e) => handleUpload('viajes', e.target));
-  $('pasajerosFile').addEventListener('change', (e) => handleUpload('pasajeros', e.target));
+  if (!DB) $('pasajerosFile').addEventListener('change', (e) => handleUpload('pasajeros', e.target));
   updateProcessButton();
 }());

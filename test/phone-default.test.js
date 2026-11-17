@@ -11,7 +11,7 @@ const NEW = '8584020500';
 const has = (r, v) => JSON.stringify([r.destinationRows, r.catalog.rows]).includes(v);
 
 test('rules: v2.8.2 Primary Phone fallback and catalog phone migration', () => {
-  assert.equal(rules.specification.version, '2.8.2');
+  assert.ok(rules.specification.changelog.some((c) => c.version === '2.8.2'));
   assert.equal(rules.field_rules.phones['Primary Phone'].default, NEW);
   assert.equal(rules.field_rules.phones['Primary Phone'].use, 'first valid');
   assert.equal(rules.field_rules.phones['Secondary Phone'].default, '');

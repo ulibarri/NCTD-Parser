@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "specification": {
+    "id": "nctd-manifest-parser",
+    "name": "NCTD Manifest Parser",
+    "organization": "North County Transit District",
+    "version": "2.8.3",
+    "status": "production",
+    "target_runtime": "Node.js",
+    "updated": "2026-11-16",
+    "extends": {
+      "file": "nctd_manifest_parser_rules_v2.8.2.json",
+      "version": "2.8.2",
+      "merge_strategy": "deep_merge_by_key",
+      "rule": "All v2.8.2 rules remain active. This version adds persistent storage for the passenger master catalog; parsing and catalog values do not change."
+    },
+    "description": "v2.8.3 overlay: the passenger master catalog can live in a DynamoDB table instead of the daily CSV upload. The App reads it by itself and writes new passengers only when the user presses Save to catalog.",
+    "changelog": [
+      {
+        "version": "2.8.3",
+        "date": "2026-11-16",
+        "changes": [
+          "Added CATALOG-STORAGE-001: with CATALOG_STORE=dynamodb the catalog is a DynamoDB table (one item per passenger, key = canonical MRN). Without it the App keeps the CSV upload (decision 2026-11-16).",
+          "Two tables: nctd-passengers-prod (Render, TOBI PROD) and nctd-passengers-stage (tests and TOBI Stage).",
+          "Processing reads the catalog from the table; the table is changed only by the Save to catalog button after reviewing the result, so a test or wrong file does not change the catalog.",
+          "New passengers are written with a conditional put: an MRN that already exists is never overwritten (CATALOG-001 first values win, also when two saves overlap).",
+          "Import CSV loads a Pasajeros file into the table with the catalog migrations; existing MRNs are kept.",
+          "The Pasajeros CSV download stays as a backup; Download backup exports the whole table.",
+          "Every catalog request in database mode needs the access key (CATALOG_ACCESS_KEY, header X-Catalog-Key); the App does not start in database mode without it.",
+          "Added acceptance tests AT-65 to AT-69."
+        ]
+      }
+    ]
+  },
+  "passenger_catalog": {
+    "storage": {
+      "rule_id": "CATALOG-STORAGE-001",
+      "modes": {
+        "csv": "Default (CATALOG_STORE empty): the user uploads the previous day's NCTD_Passengers_<YYYYMMDD>_UPDTD.csv, as in v2.8.2.",
+        "dynamodb": "CATALOG_STORE=dynamodb: the catalog is the table named in CATALOG_TABLE, in AWS_REGION."
+      },
+      "tables": {
+        "prod": "nctd-passengers-prod",
+        "stage": "nctd-passengers-stage"
+      },
+      "table_design": {
+        "partition_key": "mrn (String): MRN Number with letters and digits only, uppercase (82475PCA)",
+        "attributes": {
+          "firstName": "First Name",
+          "lastName": "Last Name",
+          "mrnNumber": "MRN Number as received",
+          "telephone": "Telephone",
+          "addedAt": "time the passenger was saved (ISO 8601, UTC)",
+          "ord": "position inside the save",
+          "source": "file the passenger came from"
+        },
+        "order": "Catalog order is addedAt, then ord, then mrn.",
+        "capacity": "Provisioned capacity, table class DynamoDB Standard, inside the AWS always-free allowance (25 GB, 25 RCU, 25 WCU per Region)."
+      },
+      "read": "Each processing reads the whole table and applies it exactly like an uploaded catalog (CATALOG-001, migrations included).",
+      "write": {
+        "trigger": "Only the Save to catalog button of a processed job, after review (decision 2026-11-16). Processing alone never writes.",
+        "new_passenger": "Conditional put with attribute_not_exists(mrn).",
+        "migration": "A catalog migration (CATALOG-NAME-MIGRATION-003, CATALOG-PHONE-MIGRATION-001) updates an existing item only if it still holds the values the job read.",
+        "conflict": "If a passenger was saved by another job after this job read the catalog, the stored values are kept and the App asks to process the file again before taking the Output to TOBI.",
+        "idempotent": "Saving the same job twice writes nothing the second time."
+      },
+      "import": "Import CSV writes a Pasajeros file into the table: migrations applied, first row of a repeated MRN wins, existing MRNs kept.",
+      "backup": "Download backup exports the table as NCTD_Passengers_<YYYYMMDD>_UPDTD.csv; the job's Pasajeros download remains.",
+      "access": {
+        "key": "CATALOG_ACCESS_KEY (environment), sent by the App in the X-Catalog-Key header.",
+        "required_for": [
+          "reading the catalog",
+          "processing a Viajes file",
+          "saving to the catalog",
+          "importing a CSV",
+          "downloading the backup"
+        ],
+        "missing_key": "The App does not start in database mode without CATALOG_ACCESS_KEY, because the URL is public.",
+        "error_code": "CATALOG_KEY_INVALID"
+      },
+      "credentials": "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY of an IAM user limited to its own table (Scan, PutItem, UpdateItem, DescribeTable). They live only in the environment, never in the repository.",
+      "store_unavailable": "If the table cannot be reached the App shows CATALOG_STORE_UNAVAILABLE and does not process, so it never treats every passenger as new by mistake.",
+      "decided_by": "Majo, 2026-11-16"
+    }
+  },
+  "exceptions": {
+    "CATALOG_KEY_INVALID": "error",
+    "CATALOG_STORE_UNAVAILABLE": "error"
+  },
+  "acceptance_tests_patch": [
+    {
+      "id": "AT-65",
+      "case": "Database mode: process a Viajes file without uploading a catalog",
+      "expected": "The catalog comes from the table; passengers in the table keep their stored values; the table does not change until Save to catalog"
+    },
+    {
+      "id": "AT-66",
+      "case": "Save to catalog, twice",
+      "expected": "First save writes only the new passengers; the second writes nothing and reports alreadySaved"
+    },
+    {
+      "id": "AT-67",
+      "case": "Another job saved the same new passenger after this job read the catalog",
+      "expected": "Stored values are kept (existed = 1, stale = true); the next processing uses the stored values"
+    },
+    {
+      "id": "AT-68",
+      "case": "Import CSV with a legacy companion name, a 9876543210 phone, a repeated MRN and an MRN already in the table",
+      "expected": "Migrations applied, first repeated row wins, existing MRN not overwritten"
+    },
+    {
+      "id": "AT-69",
+      "case": "Database mode without or with a wrong access key",
+      "expected": "401 CATALOG_KEY_INVALID for catalog, processing, save, import and backup; the App refuses to start without CATALOG_ACCESS_KEY"
+    }
+  ],
+  "consistency_contract_patch": {
+    "acceptance_test_id_range": "AT-01..AT-69 with no gaps after applying v2.5.0 to v2.8.3"
+  },
+  "acceptance_test_suite": {
+    "rules_version": "2.8.3",
+    "embedded_acceptance_cases": "AT-01 to AT-69"
+  }
+}

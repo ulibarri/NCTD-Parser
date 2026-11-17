@@ -59,10 +59,28 @@
             <h3 data-i18n="s1.pasajeros"><%= t('s1.pasajeros') %></h3>
             <small class="file-info" id="pasajerosInfo" data-i18n="s1.noFile"><%= t('s1.noFile') %></small>
           </header>
+<% if (catalogMode === 'csv') { %>
           <label>
             <span data-i18n="s1.pasajeros.accept"><%= t('s1.pasajeros.accept') %></span>
             <input type="file" id="pasajerosFile" accept=".csv" />
           </label>
+<% } else { %>
+          <!-- v2.8.3 CATALOG-STORAGE-001: catalog in the database -->
+          <p class="hint db-hint" id="dbHint"><%= t('db.hint').replace('{table}', catalogTable) %></p>
+          <form class="db-key-row" id="dbKeyForm" autocomplete="off">
+            <label for="dbKey"><span data-i18n="db.key"><%= t('db.key') %></span>
+              <input type="password" id="dbKey" autocomplete="current-password" />
+            </label>
+            <button type="submit" id="dbConnectBtn" class="btn-primary" data-i18n="db.connect"><%= t('db.connect') %></button>
+          </form>
+          <div class="db-tools" id="dbTools" hidden>
+            <label>
+              <span data-i18n="db.import"><%= t('db.import') %></span>
+              <input type="file" id="dbImportFile" accept=".csv" />
+            </label>
+            <button type="button" id="dbBackupBtn" class="secondary outline" data-i18n="db.backup"><%= t('db.backup') %></button>
+          </div>
+<% } %>
           <p class="status" id="pasajerosStatus" role="status"></p>
           <div id="pasajerosGrid" class="grid-box"></div>
         </article>
@@ -130,6 +148,13 @@
       <div id="summary" class="summary" hidden></div>
       <p id="exportStatus" class="export-status" role="status" hidden></p>
 
+      <!-- v2.8.3: new passengers are written to the database only with this button -->
+      <div class="catalog-save" id="catalogSave" hidden>
+        <p id="catalogSaveText"></p>
+        <button type="button" id="catalogSaveBtn" class="btn-primary" data-i18n="save.button"><%= t('save.button') %></button>
+        <p class="status" id="catalogSaveStatus" role="status"></p>
+      </div>
+
       <div class="downloads" id="downloads" hidden>
         <a id="dlOutput" class="secondary" role="button" href="#" download>⬇ <span data-i18n="s2.download.output"><%= t('s2.download.output') %></span> <small class="fname"></small></a>
         <a id="dlPasajeros" class="secondary" role="button" href="#" download>⬇ <span data-i18n="s2.download.pasajeros"><%= t('s2.download.pasajeros') %></span> <small class="fname"></small></a>
@@ -154,6 +179,7 @@
   </main>
 
   <script type="application/json" id="i18nData"><%- i18nJson %></script>
+  <script type="application/json" id="catalogConfig"><%- JSON.stringify({ mode: catalogMode, table: catalogTable }).replace(/</g, '\\u003c') %></script>
   <script type="application/json" id="outputColumns"><%- JSON.stringify(destinationColumns) %></script>
   <script src="/vendor/tabulator/js/tabulator.min.js"></script>
   <script src="/js/app.js"></script>

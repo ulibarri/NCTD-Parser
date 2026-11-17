@@ -13,17 +13,17 @@ const { readRules } = require('../src/rules');
 const v2 = (r) => r.destinationRows.map((d) => [d['Passenger Ty'] || '', d['Leg ID'], d['Leg ID V2']]);
 const byType = (r, companion) => r.destinationRows.filter((d) => /(PCA|COM)$/.test(d['Tobi MRN']) === companion);
 
-test('overlay chain v2.8.2 -> v2.8.1 -> v2.8.0 -> v2.7.1 -> v2.7.0 -> v2.6.0 -> v2.5.0 (33 columns, Leg ID V2 after Leg ID, AT-01..AT-64)', () => {
-  assert.equal(rules.specification.version, '2.8.2');
+test('overlay chain v2.8.3 -> v2.8.2 -> v2.8.1 -> v2.8.0 -> v2.7.1 -> v2.7.0 -> v2.6.0 -> v2.5.0 (33 columns, Leg ID V2 after Leg ID, AT-01..AT-69)', () => {
+  assert.equal(rules.specification.version, '2.8.3');
   assert.equal(rules.destination_columns.length, 33);
   assert.deepEqual(rules.destination_columns.slice(0, 3), ['Vendor ID', 'Leg ID', 'Leg ID V2']);
   assert.equal(rules.processing_pipeline[rules.processing_pipeline.indexOf('generate_leg_id') + 1], 'generate_leg_id_v2');
-  assert.deepEqual(rules.acceptance_tests.map((t) => t.id), Array.from({ length: 64 }, (_, i) => `AT-${String(i + 1).padStart(2, '0')}`));
+  assert.deepEqual(rules.acceptance_tests.map((t) => t.id), Array.from({ length: 69 }, (_, i) => `AT-${String(i + 1).padStart(2, '0')}`));
   // v2.5.0 rules are still active
   assert.ok(rules.normalization.source_character_cleanup);
   assert.equal(rules.exceptions.INVALID_CLIENT_NAME_FORMAT, 'error');
   assert.ok(rules.deployment_policy.catalog_versions);
-  assert.deepEqual(rules.specification.changelog.slice(0, 7).map((c) => c.version), ['2.8.2', '2.8.1', '2.8.0', '2.7.1', '2.7.0', '2.6.0', '2.5.0']);
+  assert.deepEqual(rules.specification.changelog.slice(0, 8).map((c) => c.version), ['2.8.3', '2.8.2', '2.8.1', '2.8.0', '2.7.1', '2.7.0', '2.6.0', '2.5.0']);
   assert.equal(rules.passenger_catalog.migration_rules.length, 1);
   assert.ok(!Object.keys(rules).some((k) => k.endsWith('_patch')));
 });
