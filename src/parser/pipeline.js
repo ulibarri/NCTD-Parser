@@ -412,6 +412,24 @@ function legIdV2(row, passengerType, rule) {
   return match ? row[match.value_from] || '' : '';
 }
 
+/**
+ * Date-only and time-only columns (rules v2.10.0, DATE-TIME-SPLIT-001). Each
+ * column says its source (PUTime, DOAppt or the effective trip date) and its
+ * format; Dropoff columns stay empty when DOAppt is empty, like Dropoff Time.
+ */
+function splitDateTime(l, split, columns) {
+  if (!split) return {};
+  const out = {};
+  for (const [column, spec] of Object.entries(split)) {
+    if (!spec || typeof spec !== 'object' || !spec.format || !columns.includes(column)) continue;
+    const needsDropoff = spec.empty_when_DOAppt_empty && !l.doTime;
+    if (needsDropoff) { out[column] = ''; continue; }
+    const time = spec.source === 'PUTime' ? l.puTime : spec.source === 'DOAppt' ? l.doTime : null;
+    out[column] = spec.kind === 'time' ? (time ? D.formatWith(spec.format, null, time) : '') : D.formatWith(spec.format, l.date);
+  }
+  return out;
+}
+
 function mapRow(l, vendorId, legId, rules, unknownSpaceTypes) {
   const fr = rules.field_rules;
   const v = l.values;
@@ -432,6 +450,8 @@ function mapRow(l, vendorId, legId, rules, unknownSpaceTypes) {
     'Trip Date': D.formatDestination(l.date),
     'Pickup Time': D.formatDestination(l.date, l.puTime),
     'Dropoff Time': l.doTime ? D.formatDestination(l.date, l.doTime) : '',
+    // v2.10.0 DATE-TIME-SPLIT-001: date and time in separate columns
+    ...splitDateTime(l, fr.dates_and_times.split_columns, rules.destination_columns),
     Mode: fr.mode.default,
     'Service Area': fr.service_area.default,
     'Pickup Address': l.pickup.street,

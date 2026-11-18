@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "specification": {
+    "id": "nctd-manifest-parser",
+    "name": "NCTD Manifest Parser",
+    "organization": "North County Transit District",
+    "version": "2.10.0",
+    "status": "production",
+    "target_runtime": "Node.js",
+    "updated": "2026-11-18",
+    "extends": {
+      "file": "nctd_manifest_parser_rules_v2.9.0.json",
+      "version": "2.9.0",
+      "merge_strategy": "deep_merge_by_key",
+      "rule": "All v2.9.0 rules remain active. This version adds four Output columns with the date and the time of pickup and dropoff in separate columns."
+    },
+    "description": "v2.10.0 overlay: Pickup Time Only, Pickup Date Only, Dropoff Time Only and Dropoff Date Only (37 Output columns). Trip Date, Pickup Time and Dropoff Time do not change.",
+    "changelog": [
+      {
+        "version": "2.10.0",
+        "date": "2026-11-18",
+        "changes": [
+          "DATE-TIME-SPLIT-001: new Output columns Pickup Time Only, Pickup Date Only, Dropoff Time Only and Dropoff Date Only, placed right after Dropoff Time (decision 2026-11-18).",
+          "Time Only columns use HH:mm, military time without seconds (07:25, 14:00); Date Only columns use MM/DD/YYYY (12/24/2026). Required format confirmed on 2026-11-18: TOBI rejected HH:mm:ss times with Pickup DateTime Invalid.",
+          "Dates come from the effective trip date, so a trip date change also updates them; times come from PUTime and DOAppt.",
+          "Dropoff Time Only and Dropoff Date Only are empty when DOAppt is empty, like Dropoff Time.",
+          "Trip Date, Pickup Time and Dropoff Time keep their format YYYY-MM-DD HH:mm:ss.SSS. The Output now has 37 columns.",
+          "destination_columns_patch accepts a list of insertions.",
+          "Added acceptance tests AT-76 to AT-79."
+        ]
+      }
+    ]
+  },
+  "destination_columns_patch": [
+    { "operation": "insert_after", "after": "Dropoff Time", "column": "Pickup Time Only", "type": "text" },
+    { "operation": "insert_after", "after": "Pickup Time Only", "column": "Pickup Date Only", "type": "text" },
+    { "operation": "insert_after", "after": "Pickup Date Only", "column": "Dropoff Time Only", "type": "text" },
+    { "operation": "insert_after", "after": "Dropoff Time Only", "column": "Dropoff Date Only", "type": "text" }
+  ],
+  "field_rules": {
+    "dates_and_times": {
+      "split_columns": {
+        "rule_id": "DATE-TIME-SPLIT-001",
+        "Pickup Time Only": { "source": "PUTime", "kind": "time", "format": "HH:mm", "example": "12:00" },
+        "Pickup Date Only": { "source": "effective trip date", "kind": "date", "format": "MM/DD/YYYY", "example": "12/24/2026" },
+        "Dropoff Time Only": { "source": "DOAppt", "kind": "time", "format": "HH:mm", "example": "09:00", "empty_when_DOAppt_empty": true },
+        "Dropoff Date Only": { "source": "effective trip date", "kind": "date", "format": "MM/DD/YYYY", "example": "12/24/2026", "empty_when_DOAppt_empty": true },
+        "clock": "military time (24-hour), HH:mm with leading zeros and no seconds",
+        "decided_by": "Majo, 2026-11-18"
+      }
+    }
+  },
+  "trip_date_override": {
+    "affected_destination_fields": {
+      "Pickup Date Only": "effective trip date (MM/DD/YYYY)",
+      "Dropoff Date Only": "effective trip date (MM/DD/YYYY); empty when DOAppt is empty"
+    }
+  },
+  "acceptance_tests_patch": [
+    {
+      "id": "AT-76",
+      "case": "PUTime 7:25, 07:25:00, 14:00, 12:00:30 or an Excel time fraction",
+      "expected": "Pickup Time Only 07:25 or 14:00 (HH:mm, military time, no seconds)"
+    },
+    {
+      "id": "AT-77",
+      "case": "TripDate 12/24/2026, 2026-12-24 or an Excel serial date; trip date changed on screen",
+      "expected": "Pickup Date Only 12/24/2026; after a date change it shows the new date"
+    },
+    {
+      "id": "AT-78",
+      "case": "DOAppt 09:00 and DOAppt empty",
+      "expected": "Dropoff Time Only 09:00 and Dropoff Date Only 12/24/2026; both empty when DOAppt is empty"
+    },
+    {
+      "id": "AT-79",
+      "case": "Output columns",
+      "expected": "37 columns; the four new ones right after Dropoff Time; Trip Date, Pickup Time and Dropoff Time unchanged"
+    }
+  ],
+  "consistency_contract_patch": {
+    "acceptance_test_id_range": "AT-01..AT-79 with no gaps after applying v2.5.0 to v2.10.0"
+  },
+  "acceptance_test_suite": {
+    "rules_version": "2.10.0",
+    "embedded_acceptance_cases": "AT-01 to AT-79"
+  }
+}

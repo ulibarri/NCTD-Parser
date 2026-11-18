@@ -88,7 +88,28 @@ function timeKey(t) {
   return `${pad(t.h)}:${pad(t.mi)}:${pad(t.s)}`;
 }
 
+/**
+ * v2.10.0 DATE-TIME-SPLIT-001: date-only and time-only columns. The format
+ * comes from the rules file; tokens YYYY MM DD HH mm ss (24-hour clock).
+ * Pass the date for date tokens and the time for time tokens.
+ */
+function formatWith(format, d, t) {
+  const map = {
+    YYYY: d && String(d.y).padStart(4, '0'),
+    MM: d && pad(d.m),
+    DD: d && pad(d.d),
+    HH: t && pad(t.h),
+    mm: t && pad(t.mi),
+    ss: t && pad(t.s),
+  };
+  return String(format).replace(/YYYY|MM|DD|HH|mm|ss/g, (tok) => {
+    if (map[tok] == null) throw new Error(`formatWith: no value for ${tok} in "${format}"`);
+    return map[tok];
+  });
+}
+
 module.exports = {
+  formatWith,
   parseTripDate,
   parseTime,
   ymdKey,

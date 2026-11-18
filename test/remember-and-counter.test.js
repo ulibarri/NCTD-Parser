@@ -53,7 +53,7 @@ async function withApp(store, fn, { accessKey = KEY } = {}) {
 const seq = (start) => ({ legIdV2Sequential: true, legIdV2Start: String(start) });
 
 test('rules: v2.9.0 remember device and Leg ID V2 counter', () => {
-  assert.equal(rules.specification.version, '2.9.0');
+  assert.ok(rules.specification.changelog.some((c) => c.version === '2.9.0'));
   const access = rules.passenger_catalog.storage.access;
   assert.equal(access.remember_device_days, 60);
   assert.equal(access.max_failed_attempts, 5);

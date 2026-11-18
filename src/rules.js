@@ -13,7 +13,7 @@ const path = require('node:path');
 
 const RULES_DIR = path.join(__dirname, '..', 'config', 'rules');
 const RULES_FILE = process.env.RULES_FILE
-  || path.join(RULES_DIR, 'nctd_manifest_parser_rules_v2.9.0.json');
+  || path.join(RULES_DIR, 'nctd_manifest_parser_rules_v2.10.0.json');
 
 let cached = null;
 
@@ -52,8 +52,9 @@ function upsertById(list = [], patch, key) {
 }
 
 const PATCHES = {
+  // one { after, column } or, since v2.10.0, a list of them applied in order
   destination_columns_patch(r, p) {
-    r.destination_columns = insertAfter(r.destination_columns, p.after, p.column, 'destination_columns');
+    for (const x of [].concat(p)) r.destination_columns = insertAfter(r.destination_columns, x.after, x.column, 'destination_columns');
   },
   processing_pipeline_patch(r, p) {
     r.processing_pipeline = insertAfter(r.processing_pipeline, p.after, p.step, 'processing_pipeline');
