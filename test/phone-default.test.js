@@ -27,10 +27,10 @@ test('AT-63 no valid phone: new passenger gets 8584020500, catalog passenger kee
     row({ 'Client ID': '2002', 'Client Name': 'ROE,JOHN', PUTime: '09:00' }),
   ], { catalog: cat });
   const byMrn = Object.fromEntries(r.destinationRows.map((d) => [d['Tobi MRN'], d]));
-  assert.equal(byMrn['1001']['Primary Phone'], NEW);
-  assert.equal(byMrn['1001']['Secondary Phone'], '');
-  assert.equal(byMrn['2002']['Primary Phone'], '7605550199');
-  assert.equal(r.catalog.rows.find((c) => c['MRN Number'] === '1001').Telephone, NEW);
+  assert.equal(byMrn.NCTD1001['Primary Phone'], NEW);
+  assert.equal(byMrn.NCTD1001['Secondary Phone'], '');
+  assert.equal(byMrn.NCTD2002['Primary Phone'], '7605550199');
+  assert.equal(r.catalog.rows.find((c) => c['MRN Number'] === 'NCTD1001').Telephone, NEW);
   assert.equal(has(r, OLD), false);
   // a real phone in Comments still wins over the fallback
   const withPhone = await run([row({ Comments: 'C: 760-555-0101' })]);

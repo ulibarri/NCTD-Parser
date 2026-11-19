@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "specification": {
+    "id": "nctd-manifest-parser",
+    "name": "NCTD Manifest Parser",
+    "organization": "North County Transit District",
+    "version": "2.11.0",
+    "status": "production",
+    "target_runtime": "Node.js",
+    "updated": "2026-11-19",
+    "extends": {
+      "file": "nctd_manifest_parser_rules_v2.10.0.json",
+      "version": "2.10.0",
+      "merge_strategy": "deep_merge_by_key",
+      "rule": "All v2.10.0 rules remain active. This version adds the NCTD prefix to Tobi MRN and to the passenger catalog MRNs."
+    },
+    "description": "v2.11.0 overlay: Tobi MRN starts with NCTD (Client ID 1365 gives NCTD1365, NCTD1365PCA, NCTD1365COM). Catalog MRNs without the prefix are migrated: in memory by the App, and once in DynamoDB with scripts/migrate-mrn-prefix.js.",
+    "changelog": [
+      {
+        "version": "2.11.0",
+        "date": "2026-11-19",
+        "changes": [
+          "MRN-PREFIX-001: Tobi MRN = NCTD + the previous value: NCTD1365 (CLI), NCTD1365PCA (PCA), NCTD1365COM (COM and COMP). A Client ID that already starts with NCTD does not get the prefix twice (decision 2026-11-19).",
+          "Vendor ID, Leg ID, Leg ID V2, Pair Status and pairing do not change: they keep the Client ID without prefix.",
+          "CATALOG-MRN-PREFIX-MIGRATION-001: a catalog MRN Number without the prefix gets it (1365 becomes NCTD1365), so known passengers keep matching and are not created again. The updated Pasajeros CSV keeps the new value; the summary counts the changes.",
+          "In database mode the App matches items still without prefix as if they had it and shows CATALOG_MRN_PREFIX_PENDING; it does not rewrite keys. The table keys (mrn) and mrnNumber are migrated once with scripts/migrate-mrn-prefix.js (dry run by default, backup file, atomic move per passenger, idempotent).",
+          "Added acceptance tests AT-80 to AT-84."
+        ]
+      }
+    ]
+  },
+  "field_rules": {
+    "tobi_mrn": {
+      "rule_id": "MRN-PREFIX-001",
+      "prefix": "NCTD",
+      "client_format": "NCTD{AlnumClientID}",
+      "companion_format": "NCTD{AlnumClientID}{identity_suffix}",
+      "prefix_idempotency": "Added once: a Client ID that already starts with NCTD (letters and digits, case-insensitive) is not prefixed again.",
+      "applies_to": "Only Tobi MRN and the catalog MRN Number. Vendor ID, Leg ID, Leg ID V2 and pairing keep the Client ID without prefix.",
+      "examples_v2_11": [
+        { "Client ID": "1365", "Passenger Ty": "CLI", "Tobi MRN": "NCTD1365" },
+        { "Client ID": "1365", "Passenger Ty": "PCA", "Tobi MRN": "NCTD1365PCA" },
+        { "Client ID": "1365", "Passenger Ty": "COMP", "Tobi MRN": "NCTD1365COM" },
+        { "Client ID": "82-475", "Passenger Ty": "CLI", "Tobi MRN": "NCTD82475" }
+      ],
+      "decided_by": "Majo, 2026-11-19"
+    }
+  },
+  "passenger_catalog": {
+    "key": {
+      "prefix": "Catalog MRNs carry the same NCTD prefix as Tobi MRN (NCTD82475PCA)."
+    },
+    "mrn_prefix_migration": {
+      "rule_id": "CATALOG-MRN-PREFIX-MIGRATION-001",
+      "prefix_from": "field_rules.tobi_mrn.prefix",
+      "applies_to": "MRN Number values (catalog CSV rows and database items) that do not start with the prefix.",
+      "action": "Add the prefix in front of the stored value (1365 becomes NCTD1365, 82475_PCA becomes NCTD82475_PCA). Names, phone and order do not change.",
+      "csv_mode": "Applied when the Pasajeros CSV is read; the updated CSV keeps the prefixed value. Summary field catalogMrnPrefixed.",
+      "database_mode": "The App matches unprefixed items as if they had the prefix, without writing, and reports CATALOG_MRN_PREFIX_PENDING with the number of items. The table is migrated once per table with scripts/migrate-mrn-prefix.js.",
+      "migration_script": {
+        "file": "scripts/migrate-mrn-prefix.js",
+        "default": "Dry run: lists what would change and writes nothing.",
+        "apply": "--apply writes a JSON backup of every item to backups/, then moves each passenger in one transaction: Put the new item (mrn = NCTD + old key, mrnNumber with prefix, other attributes unchanged) only if it does not exist, and Delete the old item only if it is unchanged.",
+        "already_moved": "If the new key already exists with the same names and phone, only the old item is deleted; if they differ, both are kept and reported for review.",
+        "untouched": "The #LEG_ID_V2_SEQ counter and items that already have the prefix.",
+        "safety": "--table must name the table in CATALOG_TABLE; production needs --table nctd-passengers-prod explicitly.",
+        "permissions": "Scan, PutItem and DeleteItem on the table. DeleteItem is added to the IAM policy only for the migration and removed afterwards."
+      },
+      "idempotent": true,
+      "decided_by": "Majo, 2026-11-19"
+    }
+  },
+  "exceptions": {
+    "CATALOG_MRN_PREFIX_PENDING": "warning"
+  },
+  "acceptance_test_suite": {
+    "expected_transforms": {
+      "Tobi MRN": "Baseline TC expected Tobi MRN values are compared with the NCTD prefix (field_rules.tobi_mrn.prefix) in front."
+    },
+    "rules_version": "2.11.0",
+    "embedded_acceptance_cases": "AT-01 to AT-84"
+  },
+  "acceptance_tests_patch": [
+    {
+      "id": "AT-80",
+      "case": "Client ID 1365 as CLI, PCA, COM and COMP; Client ID 82-475; Client ID NCTD1365",
+      "expected": "Tobi MRN NCTD1365, NCTD1365PCA, NCTD1365COM, NCTD1365COM, NCTD82475, NCTD1365; Vendor ID, Leg ID and Leg ID V2 unchanged"
+    },
+    {
+      "id": "AT-81",
+      "case": "Pasajeros CSV with MRN Number 1365, 1365PCA and NCTD2002",
+      "expected": "Known passengers match; the updated CSV has NCTD1365 and NCTD1365PCA; catalogMrnPrefixed = 2; processing the result again changes nothing"
+    },
+    {
+      "id": "AT-82",
+      "case": "Database with items 1365 and 1365PCA not yet migrated",
+      "expected": "Passengers match with their stored values; nothing new to save; CATALOG_MRN_PREFIX_PENDING (warning) with count 2; the table is not written"
+    },
+    {
+      "id": "AT-83",
+      "case": "Migration script dry run and --apply",
+      "expected": "Dry run writes nothing; --apply moves each passenger to mrn NCTD..., keeps names, phone, addedAt, ord and source, leaves the counter alone and writes a backup; a second run changes nothing"
+    },
+    {
+      "id": "AT-84",
+      "case": "Migration when the prefixed item already exists",
+      "expected": "Same names and phone: the old item is deleted; different: both are kept and reported"
+    }
+  ],
+  "consistency_contract_patch": {
+    "acceptance_test_id_range": "AT-01..AT-84 with no gaps after applying v2.5.0 to v2.11.0"
+  }
+}

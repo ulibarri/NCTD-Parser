@@ -4,3 +4,6 @@ data/*.tmp
 .DS_Store
 *.log
 .env
+backups/
+.env.*
+!.env.example

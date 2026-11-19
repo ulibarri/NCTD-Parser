@@ -102,8 +102,21 @@ function alnumClientId(clientId, isCompanion, suffix = 'PCA') {
 }
 
 /** Tobi MRN: {AlnumClientID} for clients, {AlnumClientID}PCA or {AlnumClientID}COM for companions. */
-function tobiMrn(baseId, isCompanion, suffix = 'PCA') {
-  return isCompanion ? baseId + suffix : baseId;
+/**
+ * Tobi MRN. Since v2.11.0 (MRN-PREFIX-001) it starts with a prefix (NCTD):
+ * NCTD1365, NCTD1365PCA, NCTD1365COM. A Client ID that already starts with
+ * the prefix does not get it twice.
+ */
+function tobiMrn(baseId, isCompanion, suffix = 'PCA', prefix = '') {
+  const id = isCompanion ? baseId + suffix : baseId;
+  return withPrefix(id, prefix);
+}
+
+/** Adds the prefix once (letters and digits compared, case-insensitive). */
+function withPrefix(value, prefix = '') {
+  const v = String(value ?? '');
+  if (!prefix || !v) return v;
+  return alnum(v).toUpperCase().startsWith(alnum(prefix).toUpperCase()) ? v : prefix + v;
 }
 
 const STREET_SUFFIXES = ['ST', 'STREET', 'AVE', 'AVENUE', 'RD', 'ROAD', 'DR', 'DRIVE', 'BLVD', 'LN', 'LANE', 'CT', 'COURT',
@@ -263,6 +276,7 @@ module.exports = {
   isMissing,
   splitClientName,
   tobiMrn,
+  withPrefix,
   splitAddress,
   bookingFare,
   extractPhones,

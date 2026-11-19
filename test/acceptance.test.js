@@ -35,7 +35,7 @@ test('AT-02 CLI plus PCA same Leg: separate identifiers, companion names and MRN
   assert.equal(cli['Leg ID'], '1001202610230755A');
   assert.equal(pca['Vendor ID'], '1001202610230755PCA');
   assert.equal(pca['Leg ID'], '1001202610230755PCAA');
-  assert.equal(pca['Tobi MRN'], '1001PCA');
+  assert.equal(pca['Tobi MRN'], 'NCTD1001PCA');
   assert.equal(pca['First Name'], 'JANE-PCA'); // v2.7.0 NAME-003
   assert.equal(pca['Last Name'], 'DOE');
 });

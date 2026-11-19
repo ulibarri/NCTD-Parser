@@ -43,10 +43,20 @@ function applyCatalog(catalog, destinationRows, sourceRowOf, rules) {
   const phoneMigration = rules.passenger_catalog.phone_migration;
   const legacyPhones = new Set((phoneMigration?.legacy_values || []).map((v) => String(v).replace(/\D/g, '')));
   const phoneDefault = rules.field_rules.phones['Primary Phone'].default;
+  // v2.11.0 CATALOG-MRN-PREFIX-MIGRATION-001: MRN Number without the Tobi MRN prefix gets it.
+  const mrnPrefix = mrnPrefixOf(rules);
+  let mrnPrefixed = 0;
   const catalogRows = catalog ? catalog.rows.map((r) => ({ ...r, values: { ...r.values } })) : [];
   const rows = catalogRows.map((r) => {
     const out = {};
     headers.forEach((h, i) => { out[h] = r.original[i]; });
+    const mrn = String(r.values['MRN Number'] ?? '').trim();
+    const prefixed = F.withPrefix(mrn, mrnPrefix);
+    if (prefixed !== mrn && col('MRN Number')) {
+      mrnPrefixed += 1;
+      out[col('MRN Number')] = prefixed;
+      r.values['MRN Number'] = prefixed;
+    }
     const key = keyOf(r.values['MRN Number']);
     const identitySuffix = migration && migration.identity_suffixes.find((sfx) => key.endsWith(sfx) && key.length > sfx.length);
     if (identitySuffix) {
@@ -123,7 +133,7 @@ function applyCatalog(catalog, destinationRows, sourceRowOf, rules) {
     d['Primary Phone'] = entry['Primary Phone'];
   }
 
-  return { headers, rows, added: added.length, matched: matched.size, migrated, phonesMigrated, provided: Boolean(catalog), exceptions };
+  return { headers, rows, added: added.length, matched: matched.size, migrated, phonesMigrated, mrnPrefixed, provided: Boolean(catalog), exceptions };
 }
 
 const flagsOf = (migration) => (migration.case_sensitive ? '' : 'i');
@@ -140,4 +150,24 @@ function migrateLastName(value, migration) {
   return F.collapse(value).replace(new RegExp(migration['Last Name'].remove_regex, flagsOf(migration)), '').trim();
 }
 
-module.exports = { applyCatalog, PASAJEROS_COLUMNS, keyOf, migrateFirstName, migrateLastName };
+/** Prefix to add to catalog MRNs, or '' when the migration rule is not active. */
+function mrnPrefixOf(rules) {
+  const m = rules.passenger_catalog.mrn_prefix_migration;
+  return m && rules.field_rules.tobi_mrn && rules.field_rules.tobi_mrn.prefix ? rules.field_rules.tobi_mrn.prefix : '';
+}
+
+/** Catalog rows (canonical columns) with the MRN prefix; also returns how many changed. */
+function prefixCatalogRows(rows, rules) {
+  const prefix = mrnPrefixOf(rules);
+  let count = 0;
+  const out = rows.map((r) => {
+    const mrn = String(r['MRN Number'] ?? '');
+    const p = F.withPrefix(mrn, prefix);
+    if (p === mrn) return r;
+    count += 1;
+    return { ...r, 'MRN Number': p };
+  });
+  return { rows: out, count };
+}
+
+module.exports = { applyCatalog, PASAJEROS_COLUMNS, keyOf, migrateFirstName, migrateLastName, mrnPrefixOf, prefixCatalogRows };

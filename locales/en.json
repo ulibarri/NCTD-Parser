@@ -135,5 +135,7 @@
   "save.seqDone": "Leg ID V2 recorded up to {last}; the next file starts at {nextLabel}.",
   "save.seqConflict": "Numbers {first} to {last} were already recorded (the last saved is {storedLast}). Process the file again starting at {nextLabel} before taking the Output to TOBI.",
   "err.CATALOG_TOO_MANY_ATTEMPTS": "Too many attempts with a wrong key. Wait 15 minutes and try again.",
-  "exc.CATALOG_TOO_MANY_ATTEMPTS": "Too many wrong-key attempts"
+  "exc.CATALOG_TOO_MANY_ATTEMPTS": "Too many wrong-key attempts",
+  "summary.catalogMrnPrefixed": "Catalog MRNs given the NCTD prefix",
+  "exc.CATALOG_MRN_PREFIX_PENDING": "Database passengers still without the NCTD prefix (they are still matched; the table migration has not run yet)"
 }

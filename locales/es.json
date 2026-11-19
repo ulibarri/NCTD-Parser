@@ -135,5 +135,7 @@
   "save.seqDone": "Leg ID V2 registrados hasta {last}; el siguiente archivo empieza en {nextLabel}.",
   "save.seqConflict": "Los números {first} a {last} ya estaban registrados (el último guardado es {storedLast}). Vuelve a procesar el archivo empezando en {nextLabel} antes de llevar el Output a TOBI.",
   "err.CATALOG_TOO_MANY_ATTEMPTS": "Demasiados intentos con una clave incorrecta. Espera 15 minutos e intenta de nuevo.",
-  "exc.CATALOG_TOO_MANY_ATTEMPTS": "Demasiados intentos con clave incorrecta"
+  "exc.CATALOG_TOO_MANY_ATTEMPTS": "Demasiados intentos con clave incorrecta",
+  "summary.catalogMrnPrefixed": "MRN del catálogo con prefijo NCTD agregado",
+  "exc.CATALOG_MRN_PREFIX_PENDING": "Pasajeros de la base de datos todavía sin prefijo NCTD (se reconocen igual; falta correr la migración de la tabla)"
 }

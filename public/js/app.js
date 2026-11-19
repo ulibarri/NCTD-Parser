@@ -582,6 +582,7 @@
       ['summary.pasajerosAdded', s.pasajerosAdded],
       ['summary.catalogMigrated', s.catalogProvided ? s.catalogMigrated : '—'],
       ['summary.catalogPhonesMigrated', s.catalogProvided ? s.catalogPhonesMigrated : '—'],
+      ...(s.catalogMode ? [] : [['summary.catalogMrnPrefixed', s.catalogProvided ? s.catalogMrnPrefixed : '—']]),
     ];
     for (const [key, value, note] of items) {
       const div = document.createElement('div');

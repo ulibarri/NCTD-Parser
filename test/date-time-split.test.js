@@ -12,7 +12,7 @@ const NEW = ['Pickup Time Only', 'Pickup Date Only', 'Dropoff Time Only', 'Dropo
 const only = (d) => Object.fromEntries(NEW.map((c) => [c, d[c]]));
 
 test('rules: v2.10.0 split date and time columns', () => {
-  assert.equal(rules.specification.version, '2.10.0');
+  assert.ok(rules.specification.changelog.some((c) => c.version === '2.10.0'));
   const s = rules.field_rules.dates_and_times.split_columns;
   assert.equal(s.rule_id, 'DATE-TIME-SPLIT-001');
   assert.deepEqual(NEW.map((c) => s[c].format), ['HH:mm', 'MM/DD/YYYY', 'HH:mm', 'MM/DD/YYYY']);
@@ -31,7 +31,7 @@ test('AT-76 Pickup Time Only is HH:mm, military time without seconds', async () 
     row({ 'Client ID': '6', PUTime: '12:00:30' }),
   ]);
   const by = Object.fromEntries(r.destinationRows.map((d) => [d['Tobi MRN'], d['Pickup Time Only']]));
-  assert.deepEqual(by, { 1: '07:25', 2: '07:25', 3: '14:00', 4: '14:00', 5: '00:05', 6: '12:00' });
+  assert.deepEqual(by, { NCTD1: '07:25', NCTD2: '07:25', NCTD3: '14:00', NCTD4: '14:00', NCTD5: '00:05', NCTD6: '12:00' });
 });
 
 test('AT-77 Pickup Date Only is MM/DD/YYYY and follows a trip date change', async () => {
@@ -52,9 +52,9 @@ test('AT-78 Dropoff columns: filled from DOAppt, empty when DOAppt is empty', as
     row({ 'Client ID': '2', TripDate: '12/24/2026', PUTime: '12:00', DOAppt: '' }),
   ]);
   const by = Object.fromEntries(r.destinationRows.map((d) => [d['Tobi MRN'], only(d)]));
-  assert.deepEqual(by['1'], { 'Pickup Time Only': '07:30', 'Pickup Date Only': '12/24/2026', 'Dropoff Time Only': '09:00', 'Dropoff Date Only': '12/24/2026' });
-  assert.deepEqual(by['2'], { 'Pickup Time Only': '12:00', 'Pickup Date Only': '12/24/2026', 'Dropoff Time Only': '', 'Dropoff Date Only': '' });
-  assert.equal(r.destinationRows.find((d) => d['Tobi MRN'] === '2')['Dropoff Time'], '');
+  assert.deepEqual(by.NCTD1, { 'Pickup Time Only': '07:30', 'Pickup Date Only': '12/24/2026', 'Dropoff Time Only': '09:00', 'Dropoff Date Only': '12/24/2026' });
+  assert.deepEqual(by.NCTD2, { 'Pickup Time Only': '12:00', 'Pickup Date Only': '12/24/2026', 'Dropoff Time Only': '', 'Dropoff Date Only': '' });
+  assert.equal(r.destinationRows.find((d) => d['Tobi MRN'] === 'NCTD2')['Dropoff Time'], '');
 });
 
 test('AT-79 37 columns, the new ones right after Dropoff Time, existing columns unchanged', async () => {

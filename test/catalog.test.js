@@ -15,8 +15,9 @@ test('AT-21 passenger in the catalog: names and phone come from the catalog, cat
   assert.equal(d['First Name'], 'JANE');
   assert.equal(d['Last Name'], 'DOE');
   assert.equal(d['Primary Phone'], '7605550101');
-  assert.equal(d['Tobi MRN'], '1001');
-  assert.deepEqual(r.catalog.rows, [{ 'First Name': 'JANE', 'Last Name': 'DOE', 'MRN Number': '1001', Telephone: '7605550101' }]);
+  assert.equal(d['Tobi MRN'], 'NCTD1001');
+  // v2.11.0 CATALOG-MRN-PREFIX-MIGRATION-001: the catalog MRN gets the prefix
+  assert.deepEqual(r.catalog.rows, [{ 'First Name': 'JANE', 'Last Name': 'DOE', 'MRN Number': 'NCTD1001', Telephone: '7605550101' }]);
   assert.equal(r.summary.catalogMatched, 1);
   assert.equal(r.summary.pasajerosAdded, 0);
 });
@@ -24,7 +25,7 @@ test('AT-21 passenger in the catalog: names and phone come from the catalog, cat
 test('AT-22 new passenger with a phone: appended with that phone', async () => {
   const cat = catalog([{ 'First Name': 'JANE', 'Last Name': 'DOE', 'MRN Number': '1001', Telephone: '7605550101' }]);
   const r = await run([row({ 'Client ID': '1002', 'Client Name': 'ROE,RICHARD', Comments: 'H: 760-555-0102' })], { catalog: cat });
-  assert.deepEqual(r.catalog.rows.at(-1), { 'First Name': 'RICHARD', 'Last Name': 'ROE', 'MRN Number': '1002', Telephone: '7605550102' });
+  assert.deepEqual(r.catalog.rows.at(-1), { 'First Name': 'RICHARD', 'Last Name': 'ROE', 'MRN Number': 'NCTD1002', Telephone: '7605550102' });
   assert.equal(r.summary.pasajerosAdded, 1);
 });
 
@@ -50,8 +51,8 @@ test('AT-24b the next day the same passenger keeps the catalog phone', async () 
 test('AT-25 new PCA: own catalog row', async () => {
   const r = await run([row(), row({ 'Passenger Ty': 'PCA', Comments: 'PCA CELL 760-555-0120' })], { catalog: catalog([]) });
   assert.deepEqual(r.catalog.rows, [
-    { 'First Name': 'JANE', 'Last Name': 'DOE', 'MRN Number': '1001', Telephone: '8584020500' },
-    { 'First Name': 'JANE-PCA', 'Last Name': 'DOE', 'MRN Number': '1001PCA', Telephone: '7605550120' },
+    { 'First Name': 'JANE', 'Last Name': 'DOE', 'MRN Number': 'NCTD1001', Telephone: '8584020500' },
+    { 'First Name': 'JANE-PCA', 'Last Name': 'DOE', 'MRN Number': 'NCTD1001PCA', Telephone: '7605550120' },
   ]);
 });
 
@@ -93,10 +94,10 @@ for (const type of ['PCA', 'COM', 'COMP']) {
     const sfx = ID[type];
     assert.equal(d['First Name'], `DEANNE-${sfx}`);
     assert.equal(d['Last Name'], 'ALLOUCHE');
-    assert.equal(d['Tobi MRN'], `82475${sfx}`);
+    assert.equal(d['Tobi MRN'], `NCTD82475${sfx}`);
     assert.equal(d['Vendor ID'], `82475202610230755${sfx}`);
     assert.equal(d['Leg ID'], `82475202610230755${sfx}A`);
-    assert.deepEqual(r.catalog.rows, [{ 'First Name': `DEANNE-${sfx}`, 'Last Name': 'ALLOUCHE', 'MRN Number': `82475${sfx}`, Telephone: '8584020500' }]);
+    assert.deepEqual(r.catalog.rows, [{ 'First Name': `DEANNE-${sfx}`, 'Last Name': 'ALLOUCHE', 'MRN Number': `NCTD82475${sfx}`, Telephone: '8584020500' }]);
   });
 }
 
@@ -108,8 +109,8 @@ test('AT-53 legacy suffixes in the manifest name are removed once (COMPANION-*-C
     row({ 'Client Name': 'COMPTON,MARIA-COM', 'Client ID': '7', 'Passenger Ty': 'COMP', PUTime: '11:00:00' }),
     row({ 'Client Name': 'ROE PCA,JOE', 'Client ID': '8', PUTime: '12:00:00' }),
   ]);
-  const by = (mrn) => r.destinationRows.find((d) => d['Tobi MRN'] === mrn);
-  assert.deepEqual([by('82475PCA')['Last Name'], by('82475PCA')['First Name']], ['ALLOUCHE', 'DEANNE-PCA']);
+  const by = (mrn) => r.destinationRows.find((d) => d['Tobi MRN'] === (mrn.startsWith('NCTD') ? mrn : `NCTD${mrn}`));
+  assert.deepEqual([by('NCTD82475PCA')['Last Name'], by('NCTD82475PCA')['First Name']], ['ALLOUCHE', 'DEANNE-PCA']);
   assert.deepEqual([by('5COM')['Last Name'], by('5COM')['First Name']], ['SMITH', 'ANN-COM']);
   assert.deepEqual([by('6PCA')['Last Name'], by('6PCA')['First Name']], ['PCAREZ', 'PCARLA-PCA']);
   assert.deepEqual([by('7COM')['Last Name'], by('7COM')['First Name']], ['COMPTON', 'MARIA-COM']);
@@ -127,13 +128,13 @@ test('AT-32 old-format companion catalog rows are migrated to v2.7 names (CATALO
   const d = r.destinationRows[0];
   assert.equal(d['First Name'], 'DEANNE-PCA');
   assert.equal(d['Last Name'], 'ALLOUCHE');
-  assert.equal(d['Tobi MRN'], '82475PCA');
+  assert.equal(d['Tobi MRN'], 'NCTD82475PCA');
   assert.equal(d['Primary Phone'], '7605550102');
   assert.deepEqual(r.catalog.rows, [
-    { 'First Name': 'JANE', 'Last Name': 'DOE', 'MRN Number': '1001', Telephone: '7605550101' },
-    { 'First Name': 'DEANNE-PCA', 'Last Name': 'ALLOUCHE', 'MRN Number': '82475PCA', Telephone: '7605550102' },
-    { 'First Name': 'ANN-PCA', 'Last Name': 'SMITH', 'MRN Number': '5_PCA', Telephone: '7605550103' },
-    { 'First Name': 'MARIA-COM', 'Last Name': 'LOPEZ', 'MRN Number': '3333COM', Telephone: '7605550104' },
+    { 'First Name': 'JANE', 'Last Name': 'DOE', 'MRN Number': 'NCTD1001', Telephone: '7605550101' },
+    { 'First Name': 'DEANNE-PCA', 'Last Name': 'ALLOUCHE', 'MRN Number': 'NCTD82475PCA', Telephone: '7605550102' },
+    { 'First Name': 'ANN-PCA', 'Last Name': 'SMITH', 'MRN Number': 'NCTD5_PCA', Telephone: '7605550103' },
+    { 'First Name': 'MARIA-COM', 'Last Name': 'LOPEZ', 'MRN Number': 'NCTD3333COM', Telephone: '7605550104' },
   ]);
   assert.equal(r.summary.catalogMigrated, 3);
   assert.equal(r.summary.pasajerosAdded, 0);
@@ -141,7 +142,7 @@ test('AT-32 old-format companion catalog rows are migrated to v2.7 names (CATALO
 
 test('AT-33 reprocessing a catalog in the v2.7 format changes nothing', async () => {
   const day1 = await run([row({ 'Client Name': 'ALLOUCHE,DEANNE', 'Client ID': '82475', 'Passenger Ty': 'PCA' })], { catalog: catalog([]) });
-  assert.deepEqual(day1.catalog.rows, [{ 'First Name': 'DEANNE-PCA', 'Last Name': 'ALLOUCHE', 'MRN Number': '82475PCA', Telephone: '8584020500' }]);
+  assert.deepEqual(day1.catalog.rows, [{ 'First Name': 'DEANNE-PCA', 'Last Name': 'ALLOUCHE', 'MRN Number': 'NCTD82475PCA', Telephone: '8584020500' }]);
   const day2 = await run([row({ 'Client Name': 'ALLOUCHE,DEANNE', 'Client ID': '82475', 'Passenger Ty': 'PCA' })], { catalog: catalog(day1.catalog.rows) });
   assert.deepEqual(day2.catalog.rows, day1.catalog.rows);
   assert.equal(day2.summary.catalogMigrated, 0);
@@ -154,7 +155,7 @@ test('migration does not touch client rows and does not change the uploaded tabl
   const cat = catalog([{ 'First Name': 'JOE - PCA', 'Last Name': 'ROE COMPANION', 'MRN Number': '2002', Telephone: '7605550103' }]);
   const before = JSON.stringify(cat);
   const r = await run([row()], { catalog: cat });
-  assert.deepEqual(r.catalog.rows[0], { 'First Name': 'JOE - PCA', 'Last Name': 'ROE COMPANION', 'MRN Number': '2002', Telephone: '7605550103' });
+  assert.deepEqual(r.catalog.rows[0], { 'First Name': 'JOE - PCA', 'Last Name': 'ROE COMPANION', 'MRN Number': 'NCTD2002', Telephone: '7605550103' });
   assert.equal(r.summary.catalogMigrated, 0);
   assert.equal(JSON.stringify(cat), before);
 });

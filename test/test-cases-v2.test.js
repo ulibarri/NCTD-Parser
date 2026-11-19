@@ -8,6 +8,7 @@
 // tag value CBLA; TC-003 and TC-015 expect First Name DEANNE (v2.3.0)
 // (acceptance_test_suite.expected_overrides).
 
+const { withPrefix } = require('../src/parser/fields');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const suite = require(`./fixtures/${require('./helpers').rules.acceptance_test_suite.baseline_file}`);
@@ -35,6 +36,10 @@ for (const tc of suite.test_cases) {
     const overrides = (rules.acceptance_test_suite.expected_overrides || {})[tc.id] || {};
     for (const [i, original] of tc.expected.entries()) {
       const exp = { ...original, ...overrides }; // agreed deviations (e.g. TC-017: CBLA)
+      // v2.11.0 expected_transforms: baseline Tobi MRN values are compared with the NCTD prefix
+      if (exp['Tobi MRN'] && rules.acceptance_test_suite.expected_transforms?.['Tobi MRN']) {
+        exp['Tobi MRN'] = withPrefix(exp['Tobi MRN'], rules.field_rules.tobi_mrn.prefix);
+      }
       if (exp.error) {
         if (deviations[tc.id]) {
           // agreed deviation: Invalid Trips, export not blocked

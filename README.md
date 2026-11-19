@@ -1,6 +1,6 @@
 # NCTD Manifest Parser
 
-WebApp en Node.js y Express que convierte el manifiesto de viajes de North County Transit District ("Viajes") en el CSV de importación de TOBI ("Output"). Aplica las reglas de `config/rules/nctd_manifest_parser_rules_v2.10.0.json`. Es una cadena de capas: v2.10.0 → v2.9.0 → v2.8.3 → v2.8.2 → v2.8.1 → v2.8.0 → v2.7.1 → v2.7.0 → v2.6.0 → v2.5.0. La App carga la v2.5.0 y le aplica en orden los cambios de cada capa. Por eso las diez versiones deben estar en `config/rules/`.
+WebApp en Node.js y Express que convierte el manifiesto de viajes de North County Transit District ("Viajes") en el CSV de importación de TOBI ("Output"). Aplica las reglas de `config/rules/nctd_manifest_parser_rules_v2.11.0.json`. Es una cadena de capas: v2.11.0 → v2.10.0 → v2.9.0 → v2.8.3 → v2.8.2 → v2.8.1 → v2.8.0 → v2.7.1 → v2.7.0 → v2.6.0 → v2.5.0. La App carga la v2.5.0 y le aplica en orden los cambios de cada capa. Por eso las once versiones deben estar en `config/rules/`.
 
 ## Requisitos
 
@@ -73,6 +73,18 @@ Permisos del usuario de IAM (uno por tabla; cambia `<CUENTA>` y el nombre de la 
 }
 ```
 
+### Migrar la tabla al prefijo NCTD (v2.11.0, una sola vez por tabla)
+
+Mientras la tabla no esté migrada, la App reconoce a los pasajeros guardados sin prefijo como si lo tuvieran, no escribe sus llaves y muestra el aviso `CATALOG_MRN_PREFIX_PENDING`. La migración mueve cada pasajero a la llave con prefijo (`1365` → `NCTD1365`) y agrega el prefijo a `mrnNumber`. Los nombres, el teléfono, `addedAt`, `ord`, `source` y el contador `#LEG_ID_V2_SEQ` no cambian.
+
+1. En IAM agrega `"dynamodb:DeleteItem"` a la política de la tabla (DynamoDB no permite cambiar una llave: se escribe la nueva y se borra la vieja).
+2. Ensayo, que no escribe nada: `node --env-file=.env scripts/migrate-mrn-prefix.js --table nctd-passengers-stage`
+3. Migración: agrega `--apply`. Antes de escribir guarda un respaldo JSON de la tabla en `backups/` (no se sube a git). Cada pasajero se mueve en una transacción: la llave nueva solo se crea si no existe y la vieja solo se borra si no cambió.
+4. Si el script se corre otra vez, no cambia nada. Si encuentra una llave con prefijo que ya existe con otros datos, deja las dos y las reporta.
+5. Quita `"dynamodb:DeleteItem"` de la política.
+
+`--table` tiene que ser igual a `CATALOG_TABLE` del archivo `.env` que usas, para no tocar PROD por error. Para PROD usa un archivo aparte con las llaves del usuario de PROD, por ejemplo `.env.prod` (los archivos `.env.*` no se suben a git), y `--table nctd-passengers-prod`.
+
 ## Uso
 
 1. **Sección 1:** carga Viajes (`.xlsx` o `.csv`) y el catálogo de Pasajeros (`.csv`, el `NCTD_Passengers_<AAAAMMDD>_UPDTD.csv` del día anterior). Cada archivo se muestra en su datagrid.
@@ -95,6 +107,8 @@ src/parser/dates.js            Fechas y horas
 src/parser/pasajeros.js        Catálogo maestro de Pasajeros
 src/catalog-store.js           Catálogo en DynamoDB (o en memoria para pruebas) y contador de Leg ID V2
 src/catalog-session.js         Equipo recordado (cookie firmada) y límite de intentos
+src/catalog-migrations.js      Migración de llaves al prefijo NCTD
+scripts/migrate-mrn-prefix.js  Script de la migración (ensayo por defecto, --apply para escribir)
 src/parser/csv-export.js       CSV con BOM UTF-8
 src/routes/api.js              API REST
 locales/                       Textos en español e inglés
@@ -133,6 +147,7 @@ test/                          Pruebas (fixtures/ contiene la matriz TC v2.0)
 - **Catálogo maestro de Pasajeros (regla CATALOG-001):** sube cada día el `NCTD_Passengers_<AAAAMMDD>_UPDTD.csv` del día anterior. Si el pasajero ya está en el catálogo, First Name, Last Name y Primary Phone se toman de ahí y nunca cambian, para no crear alias en TOBI. Los pasajeros nuevos, incluidos los acompañantes (`82475PCA`), se agregan al final con los datos del primer viaje en que aparecen (sin teléfono: `8584020500`, desde la v2.8.2; antes `9876543210`). Al subir un catálogo, las filas que todavía tengan `9876543210` cambian a `8584020500` (regla CATALOG-PHONE-MIGRATION-001) y el resumen muestra cuántas cambiaron. Si no se sube el catálogo, la App avisa que todos se trataron como nuevos.
 - **Leg ID V2 consecutivo (regla LEG-ID-V2-SEQUENTIAL-001, v2.8.0):** la casilla "Asignar números consecutivos a Leg ID V2" reemplaza el Leg ID V2 de cada viaje del Output por `L000001`, `L000002`… en el orden del archivo, empezando en el número del campo "Iniciar en" (1 por defecto). Para no repetir números en TOBI, cada archivo debe empezar en el número siguiente al último del anterior; el aviso de exportación muestra con cuál seguir. Vendor ID, Leg ID, Tobi MRN, Pair Status y el catálogo no cambian. Si la numeración pasara de `L999999`, el Output no se genera (`LEG_ID_V2_SEQUENCE_OVERFLOW`).
 - **Acompañantes (reglas v2.7.0 y v2.7.1):** PCA y COM son identidades distintas; COMP se trata como COM. Tobi MRN, Vendor ID y Leg ID usan `PCA` o `COM` sin guiones (`3333PCA`, `3333COM`, `…COMA`). El First Name lleva `-PCA` o `-COM` una sola vez y el Last Name no lleva sufijo (`LOPEZ,MARIA` PCA → `LOPEZ` / `MARIA-PCA`). Un PCA nunca se empareja con un COM. Si el manifiesto trae sufijos viejos (`ALLOUCHE COMPANION,DEANNE - PCA`), se quitan una vez. Al subir un catálogo, las filas de acompañantes con el formato anterior se corrigen (CATALOG-NAME-MIGRATION-003). Los catálogos generados antes de la v2.7.0 se descartan y el catálogo se regenera desde el manifiesto del 23 de octubre.
+- **Prefijo NCTD en Tobi MRN (MRN-PREFIX-001, v2.11.0):** Tobi MRN empieza con `NCTD`: Client ID 1365 da `NCTD1365`, `NCTD1365PCA` o `NCTD1365COM`. Un Client ID que ya empieza con NCTD no lo recibe dos veces. Vendor ID, Leg ID, Leg ID V2 y el emparejamiento no cambian. Las MRN del catálogo que no tienen el prefijo lo reciben al leerse (CATALOG-MRN-PREFIX-MIGRATION-001), así los pasajeros conocidos se siguen reconociendo; ver "Migrar la tabla al prefijo NCTD".
 - **Fecha y hora en columnas separadas (DATE-TIME-SPLIT-001, v2.10.0):** después de `Dropoff Time` el Output lleva `Pickup Time Only`, `Pickup Date Only`, `Dropoff Time Only` y `Dropoff Date Only` (37 columnas en total). Las horas usan `HH:mm`, hora militar sin segundos (`12:00`, `09:00`), y las fechas `MM/DD/YYYY` (`12/24/2026`), como pide TOBI (con segundos rechazó las filas con `Pickup DateTime Invalid`). Las fechas salen de la fecha efectiva del viaje, así que también cambian con "Cambiar la fecha"; las horas salen de PUTime y DOAppt. Si DOAppt viene vacío, las dos columnas de Dropoff quedan vacías, igual que `Dropoff Time`. Trip Date, Pickup Time y Dropoff Time no cambian.
 - **Leg ID V2 (regla experimental LEG-ID-V2-EXPERIMENTAL-001, v2.6.0):** el Output lleva la columna `Leg ID V2` después de `Leg ID`. En clientes (CLI) copia el Leg ID; en acompañantes (PCA, COM, COMP) copia el Vendor ID. Vendor ID, Leg ID, Tobi MRN y Pair Status no cambian. La casilla "Modo experimental Leg ID V2 (solo TOBI Stage)" activa el modo `TOBI_INDEPENDENT_LEGS_V2`: con ella, un Leg ID V2 repetido o inválido bloquea el Output; sin ella solo se avisa. El archivo Output es el mismo en los dos modos; en TOBI Stage se elige Leg ID V2 como identificador del tramo. No se usa en PROD.
 - **Apodos en Client Name (regla CLIENT-NAME-NICKNAME-001, v2.8.1):** un apodo entre `( )`, `[ ]`, `" "` o `“ ”` se quita del nombre junto con sus delimitadores, porque TOBI usa el nombre como llave y el apodo crearía alias. `MATTHEWS,SCOTT  (MICHAEL)` queda como `MATTHEWS` / `SCOTT`, y el apodo se agrega al final de Booking Notes como `Nickname: MICHAEL`. Las comillas simples no se tocan (`O'BRIEN`). Si el nombre queda vacío, la fila va a Invalid Trips, que muestra el nombre original.

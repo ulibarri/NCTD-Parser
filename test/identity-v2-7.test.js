@@ -13,17 +13,17 @@ const ALNUM = /^[A-Za-z0-9]+$/;
 
 test('AT-45 PCA: First Name -PCA, Last Name unchanged, MRN 3333PCA', async () => {
   const r = await run([lopez('PCA')]);
-  assert.deepEqual(pick(r.destinationRows[0]), { 'Last Name': 'LOPEZ', 'First Name': 'MARIA-PCA', 'Tobi MRN': '3333PCA' });
+  assert.deepEqual(pick(r.destinationRows[0]), { 'Last Name': 'LOPEZ', 'First Name': 'MARIA-PCA', 'Tobi MRN': 'NCTD3333PCA' });
 });
 
 test('AT-46 COM: First Name -COM, MRN 3333COM', async () => {
   const r = await run([lopez('COM')]);
-  assert.deepEqual(pick(r.destinationRows[0]), { 'Last Name': 'LOPEZ', 'First Name': 'MARIA-COM', 'Tobi MRN': '3333COM' });
+  assert.deepEqual(pick(r.destinationRows[0]), { 'Last Name': 'LOPEZ', 'First Name': 'MARIA-COM', 'Tobi MRN': 'NCTD3333COM' });
 });
 
 test('AT-47 COMP canonicalizes to COM', async () => {
   const r = await run([lopez('COMP')]);
-  assert.deepEqual(pick(r.destinationRows[0]), { 'Last Name': 'LOPEZ', 'First Name': 'MARIA-COM', 'Tobi MRN': '3333COM' });
+  assert.deepEqual(pick(r.destinationRows[0]), { 'Last Name': 'LOPEZ', 'First Name': 'MARIA-COM', 'Tobi MRN': 'NCTD3333COM' });
   assert.equal(r.destinationRows[0]['Vendor ID'], '3333202610230755COM');
 });
 
@@ -35,10 +35,10 @@ for (const [id, type, sfx] of [['AT-48', 'PCA', 'PCA'], ['AT-49', 'COM', 'COM']]
       for (const c of ['Tobi MRN', 'Vendor ID', 'Leg ID', 'Leg ID V2']) assert.match(d[c], ALNUM, `${c} ${d[c]}`);
     }
     assert.deepEqual(r.destinationRows.map((d) => d['Leg ID']), [`3333202610230755${sfx}A`, `3333202610231500${sfx}B`]);
-    assert.equal(r.destinationRows[0]['Tobi MRN'], `3333${sfx}`);
+    assert.equal(r.destinationRows[0]['Tobi MRN'], `NCTD3333${sfx}`);
     // reprocessing an ID that already carries the suffix does not duplicate it
     const again = await run([lopez(type, { 'Client ID': `3333${sfx}` })]);
-    assert.equal(again.destinationRows[0]['Tobi MRN'], `3333${sfx}`);
+    assert.equal(again.destinationRows[0]['Tobi MRN'], `NCTD3333${sfx}`);
   });
 }
 
@@ -57,8 +57,8 @@ test('AT-51 a PCA leg never pairs with a COM/COMP leg', async () => {
   const back = returnOf(lopez('COMP'));
   const r = await run([out, back]);
   assert.deepEqual(r.destinationRows.map((d) => [d['Tobi MRN'], d['Pair Status'], d['Leg ID']]), [
-    ['3333PCA', 'Unpaired', '3333202610230755PCAA'],
-    ['3333COM', 'Unpaired', '3333202610231500COMA'],
+    ['NCTD3333PCA', 'Unpaired', '3333202610230755PCAA'],
+    ['NCTD3333COM', 'Unpaired', '3333202610231500COMA'],
   ]);
   // same class still pairs
   const ok = await run([lopez('COM'), returnOf(lopez('COMP'))]);

@@ -67,9 +67,9 @@ test('AT-65 database mode: the catalog comes from the table and processing write
     ]);
     assert.equal(r.status, 200, JSON.stringify(r.data));
     const byMrn = Object.fromEntries(r.data.rows.map((d) => [d['Tobi MRN'], d]));
-    assert.equal(byMrn['1001']['First Name'], 'JANE');
-    assert.equal(byMrn['1001']['Primary Phone'], '7605550101');
-    assert.equal(byMrn['2002']['Primary Phone'], '8584020500');
+    assert.equal(byMrn.NCTD1001['First Name'], 'JANE');
+    assert.equal(byMrn.NCTD1001['Primary Phone'], '7605550101');
+    assert.equal(byMrn.NCTD2002['Primary Phone'], '8584020500');
     assert.equal(r.data.summary.catalogMatched, 1);
     assert.deepEqual(r.data.summary.catalogPending, { added: 1, changed: 0, legIdV2: null });
     assert.equal(r.data.summary.catalogTable, 'nctd-passengers-stage');
@@ -90,7 +90,7 @@ test('AT-66 save to catalog writes the new passengers once', async () => {
     const list = await call('/catalog');
     assert.deepEqual(list.data.rows, [
       { 'First Name': 'JANE', 'Last Name': 'DOE', 'MRN Number': '1001', Telephone: '7605550101' },
-      { 'First Name': 'JOHN-PCA', 'Last Name': 'ROE', 'MRN Number': '2002PCA', Telephone: '8584020500' },
+      { 'First Name': 'JOHN-PCA', 'Last Name': 'ROE', 'MRN Number': 'NCTD2002PCA', Telephone: '8584020500' },
     ]);
     // the next day the passenger comes from the table
     const day2 = await process([row({ 'Client ID': '2002', 'Client Name': 'ROE,JOHNNY', 'Passenger Ty': 'PCA', Comments: 'C: 760-555-0110' })]);
@@ -99,7 +99,7 @@ test('AT-66 save to catalog writes the new passengers once', async () => {
     assert.deepEqual(day2.data.summary.catalogPending, { added: 0, changed: 0, legIdV2: null });
     const backup = await call('/catalog/export');
     assert.match(backup.data, /^First Name,Last Name,MRN Number,Telephone\r?\n/);
-    assert.match(backup.data, /JOHN-PCA,ROE,2002PCA,8584020500/);
+    assert.match(backup.data, /JOHN-PCA,ROE,NCTD2002PCA,8584020500/);
   });
 });
 
@@ -110,7 +110,7 @@ test('AT-67 a passenger saved by another job keeps its stored values', async () 
     const b = await process([row({ 'Client ID': '3003', 'Client Name': 'LOPEZ,ANITA', Comments: 'C: 760-555-0002' })]);
     assert.equal((await call(`/jobs/${b.data.jobId}/catalog`, { method: 'POST' })).data.saved, 1);
     const late = await call(`/jobs/${a.data.jobId}/catalog`, { method: 'POST' });
-    assert.deepEqual({ saved: late.data.saved, existed: late.data.existed, stale: late.data.stale, ids: late.data.existedIds }, { saved: 0, existed: 1, stale: true, ids: ['3003'] });
+    assert.deepEqual({ saved: late.data.saved, existed: late.data.existed, stale: late.data.stale, ids: late.data.existedIds }, { saved: 0, existed: 1, stale: true, ids: ['NCTD3003'] });
     const again = await process([row({ 'Client ID': '3003', 'Client Name': 'LOPEZ,ANA' })]);
     assert.equal(again.data.rows[0]['First Name'], 'ANITA');
     assert.equal(again.data.rows[0]['Primary Phone'], '7605550002');
@@ -133,8 +133,8 @@ test('AT-68 import CSV: migrations, first repeated row wins, existing MRN kept',
     const rows = (await call('/catalog')).data.rows;
     assert.deepEqual(rows, [
       { 'First Name': 'JANE', 'Last Name': 'DOE', 'MRN Number': '1001', Telephone: '7605550101' },
-      { 'First Name': 'DEANNE-PCA', 'Last Name': 'ALLOUCHE', 'MRN Number': '82475PCA', Telephone: '8584020500' },
-      { 'First Name': 'DEANNE', 'Last Name': 'ALLOUCHE', 'MRN Number': '82475', Telephone: '7605550300' },
+      { 'First Name': 'DEANNE-PCA', 'Last Name': 'ALLOUCHE', 'MRN Number': 'NCTD82475PCA', Telephone: '8584020500' },
+      { 'First Name': 'DEANNE', 'Last Name': 'ALLOUCHE', 'MRN Number': 'NCTD82475', Telephone: '7605550300' },
     ]);
   });
 });

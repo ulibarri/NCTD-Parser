@@ -4,7 +4,8 @@ const express = require('express');
 const multer = require('multer');
 const { readTable, IngestionError } = require('../parser/ingestion');
 const { processViajes, distinctTripDates, applyTripDateOverride, ProcessingError, parseSequenceStart } = require('../parser/pipeline');
-const { PASAJEROS_COLUMNS, applyCatalog, keyOf } = require('../parser/pasajeros');
+const { PASAJEROS_COLUMNS, applyCatalog, keyOf, prefixCatalogRows, mrnPrefixOf } = require('../parser/pasajeros');
+const { withPrefix } = require('../parser/fields');
 const { asTable, diffCatalog } = require('../catalog-store');
 const session = require('../catalog-session');
 const { toCsv, outputName } = require('../parser/csv-export');
@@ -237,7 +238,13 @@ function createApiRouter({ rules, uploads, jobs, catalogStore = null, accessKey 
         seen.add(k);
         return true;
       });
-      const { saved, existed } = await storeCall(() => catalogStore.addNew(rows, { source: req.file.originalname }));
+      // v2.11.0: a passenger already stored without the NCTD prefix counts as existing
+      const stored = prefixCatalogRows((await storeCall(() => catalogStore.snapshot())).rows, rules).rows;
+      const storedKeys = new Set(stored.map((r) => keyOf(r['MRN Number'])));
+      const fresh = rows.filter((r) => !storedKeys.has(keyOf(r['MRN Number'])));
+      const result = await storeCall(() => catalogStore.addNew(fresh, { source: req.file.originalname }));
+      const saved = result.saved;
+      const existed = [...result.existed, ...rows.filter((r) => storedKeys.has(keyOf(r['MRN Number'])))];
       const invalidPhones = (migrated.exceptions.find((e) => e.code === 'CATALOG_PHONE_INVALID') || {}).count || 0;
       res.json({
         filename: req.file.originalname,
@@ -247,6 +254,7 @@ function createApiRouter({ rules, uploads, jobs, catalogStore = null, accessKey 
         duplicates: table.rows.length - rows.length,
         migrated: migrated.migrated,
         phonesMigrated: migrated.phonesMigrated,
+        mrnPrefixed: migrated.mrnPrefixed,
         invalidPhones,
       });
     } catch (err) {
@@ -261,7 +269,10 @@ function createApiRouter({ rules, uploads, jobs, catalogStore = null, accessKey 
       // In database mode the catalog always comes from the database.
       const pasajeros = !catalogStore && body.pasajerosUploadId ? getUpload(body.pasajerosUploadId, 'pasajeros') : null;
       const snap = catalogStore ? await storeCall(() => catalogStore.snapshot()) : null;
-      const catalogBefore = snap ? snap.rows : null;
+      // v2.11.0: items still without the NCTD prefix are matched with it; the
+      // table itself is migrated once with scripts/migrate-mrn-prefix.js.
+      const prefixedSnap = snap ? prefixCatalogRows(snap.rows, rules) : null;
+      const catalogBefore = prefixedSnap ? prefixedSnap.rows : null;
       const catalogTable = catalogStore ? asTable(catalogBefore) : pasajeros && pasajeros.table;
       let overrideDate = null;
       if (body.newTripDate) {
@@ -293,10 +304,24 @@ function createApiRouter({ rules, uploads, jobs, catalogStore = null, accessKey 
       let catalogJob = null;
       if (catalogStore) {
         const diff = diffCatalog(catalogBefore, canonicalRows(pas, PASAJEROS_COLUMNS));
+        // v2.11.0: a correction to an item not yet migrated is written to that
+        // item (old key, old MRN); the key itself moves only with the migration script.
+        const prefix = mrnPrefixOf(rules);
+        const rawByKey = new Map(snap.rows.map((r) => [keyOf(withPrefix(r['MRN Number'], prefix)), r]));
+        diff.changed = diff.changed
+          .map(({ before, after }) => {
+            const raw = rawByKey.get(keyOf(before['MRN Number'])) || before;
+            return { before: raw, after: { ...after, 'MRN Number': raw['MRN Number'] } };
+          })
+          .filter(({ before, after }) => PASAJEROS_COLUMNS.some((c) => String(before[c] ?? '') !== String(after[c] ?? '')));
         // v2.9.0 LEG-ID-V2-COUNTER-001: the consecutive range is saved with the result.
         const seq = summary.legIdV2Sequence;
         const range = seq && seq.first ? { first: seq.start, last: seq.nextStart - 1 } : null;
         catalogJob = { diff, saved: null, source: viajes.filename, range };
+        if (prefixedSnap.count) {
+          result.exceptions.push({ code: 'CATALOG_MRN_PREFIX_PENDING', severity: rules.exceptions.CATALOG_MRN_PREFIX_PENDING || 'warning', rows: [], count: prefixedSnap.count });
+        }
+        summary.catalogMrnPrefixPending = prefixedSnap.count;
         summary.catalogMode = catalogStore.kind;
         summary.catalogTable = catalogStore.table;
         summary.catalogPending = {
