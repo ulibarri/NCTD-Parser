@@ -10,23 +10,27 @@ const { toCsv, outputName } = require('../src/parser/csv-export');
 const { rules } = require('./helpers');
 
 const IND = rules.field_rules.pickup_address.secondary_indicators;
+const OPT = rules.field_rules.address_secondary; // v2.12.0 ADDRESS-SUITE-002
 
 test('splitAddress handles glued and spaced units', () => {
   const cases = [
-    ['2245 CAMINO VIDA ROBLE  UNIT100', '2245 CAMINO VIDA ROBLE', 'UNIT100'],
+    ['2245 CAMINO VIDA ROBLE  UNIT100', '2245 CAMINO VIDA ROBLE', 'UNIT 100'],
     ['1475 RANCHEROS DR  UNIT 196', '1475 RANCHEROS DR', 'UNIT 196'],
     ['100 SANTA FE DR  STE 100', '100 SANTA FE DR', 'STE 100'],
-    ['55 LAS FLORES DR  SPC131', '55 LAS FLORES DR', 'SPC131'],
+    ['55 LAS FLORES DR  SPC131', '55 LAS FLORES DR', 'SPC 131'],
     ['12 LINDA VISTA DR  SP 307', '12 LINDA VISTA DR', 'SP 307'],
     ['9 SYCAMORE AVE  # 159', '9 SYCAMORE AVE', '# 159'],
     ['40 N BROADWAY  #21', '40 N BROADWAY', '#21'],
     ['10 OAK ST APT B', '10 OAK ST', 'APT B'],
     ['413 AUTUMN DR 220', '413 AUTUMN DR', '220'],
-    ['3625 VISTA OCEANA 13', '3625 VISTA OCEANA 13', ''],
+    ['3625 VISTA OCEANA 13', '3625 VISTA OCEANA', '13'],
     ['1 SPA WAY', '1 SPA WAY', ''],
     ['700 W VALLEY PKY', '700 W VALLEY PKY', ''],
   ];
-  for (const [input, street, suite] of cases) assert.deepEqual(F.splitAddress(input, IND), { street, suite }, input);
+  for (const [input, street, suite] of cases) assert.deepEqual(F.splitAddress(input, IND, OPT), { street, suite }, input);
+  // without the v2.12.0 options the v1.4.0 behavior is unchanged
+  assert.deepEqual(F.splitAddress('2245 CAMINO VIDA ROBLE UNIT100', IND), { street: '2245 CAMINO VIDA ROBLE', suite: 'UNIT100' });
+  assert.deepEqual(F.splitAddress('3625 VISTA OCEANA 13', IND), { street: '3625 VISTA OCEANA 13', suite: '' });
 });
 
 test('dates and times', () => {

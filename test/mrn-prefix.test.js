@@ -12,7 +12,7 @@ const { migrateMrnPrefix } = require('../src/catalog-migrations');
 const { withPrefix } = require('../src/parser/fields');
 
 test('rules: v2.11.0 NCTD prefix', () => {
-  assert.equal(rules.specification.version, '2.11.0');
+  assert.ok(rules.specification.changelog.some((c) => c.version === '2.11.0'));
   assert.equal(rules.field_rules.tobi_mrn.prefix, 'NCTD');
   assert.equal(rules.field_rules.tobi_mrn.rule_id, 'MRN-PREFIX-001');
   assert.equal(rules.passenger_catalog.mrn_prefix_migration.rule_id, 'CATALOG-MRN-PREFIX-MIGRATION-001');

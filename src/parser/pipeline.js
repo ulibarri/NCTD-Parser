@@ -192,8 +192,8 @@ async function processViajes({ table, rules, overrideDate = null, catalog = null
     for (const [k, v] of Object.entries(row.values)) {
       values[k] = collapseFields.has(k) ? F.collapse(v) : String(v ?? '').trim();
     }
-    const pu = F.splitAddress(values.PUAddress, fr.pickup_address.secondary_indicators);
-    const dropoff = F.splitAddress(values.DOAddress, fr.dropoff_address.secondary_indicators);
+    const pu = F.splitAddress(values.PUAddress, fr.pickup_address.secondary_indicators, fr.address_secondary);
+    const dropoff = F.splitAddress(values.DOAddress, fr.dropoff_address.secondary_indicators, fr.address_secondary);
     return {
       row,
       values,

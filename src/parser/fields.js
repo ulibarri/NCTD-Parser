@@ -127,8 +127,17 @@ const STREET_SUFFIXES = ['ST', 'STREET', 'AVE', 'AVENUE', 'RD', 'ROAD', 'DR', 'D
  * Recognizes indicators with or without a space before the unit number
  * (UNIT 4, UNIT100, SPC131, # 159) and a standalone trailing unit number
  * after a street suffix (e.g. "123 MAIN ST 5").
+ *
+ * v2.12.0 ADDRESS-SUITE-002 (options = field_rules.address_secondary):
+ * - glued_indicator_spacing: UNIT100 -> UNIT 100, SUITE100 -> SUITE 100
+ *   (the indicator word as received; # units are not changed);
+ * - standalone_trailing_unit.after_street_name_without_suffix: a trailing
+ *   number also splits after a street name without an English suffix
+ *   (2245 CAMINO VIDA ROBLE 100), when the address starts with a house number,
+ *   the street name has at least min_street_words words and its last word is
+ *   not a highway word (HIGHWAY 101, STATE ROUTE 78 stay whole).
  */
-function splitAddress(address, indicators) {
+function splitAddress(address, indicators, options = {}) {
   const text = collapse(address);
   if (!text) return { street: '', suite: '' };
   const words = indicators
@@ -141,11 +150,32 @@ function splitAddress(address, indicators) {
   const unit = '\\s*#?\\s*[A-Z]?\\d[A-Z0-9-]*|\\s+#?\\s*[A-Z]';
   const withWord = new RegExp(`^(.*\\S)\\s+((?:${words})\\.?(?:${unit}))$`, 'i');
   const withHash = new RegExp(`^(.*\\S)\\s+(#\\s*(?:[A-Z]?\\d[A-Z0-9-]*|[A-Z]))$`, 'i');
-  let m = text.match(withWord) || text.match(withHash);
+  let m = text.match(withWord);
+  if (m) {
+    let suite = m[2].trim();
+    const spacing = options.glued_indicator_spacing;
+    if (spacing && spacing.enabled) {
+      suite = suite.replace(new RegExp(`^((?:${words})\\.?)(?=#?[A-Z]?\\d)`, 'i'), `$1${spacing.separator ?? ' '}`);
+    }
+    return { street: m[1].trim(), suite };
+  }
+  m = text.match(withHash);
   if (m) return { street: m[1].trim(), suite: m[2].trim() };
   if (indicators.includes('standalone trailing unit')) {
     m = text.match(/^(.*\s(\S+))\s+([A-Z]?\d+[A-Z]?)$/i);
     if (m && STREET_SUFFIXES.includes(m[2].replace('.', '').toUpperCase())) return { street: m[1].trim(), suite: m[3] };
+    const free = options.standalone_trailing_unit && options.standalone_trailing_unit.after_street_name_without_suffix;
+    if (free && free.enabled) {
+      m = text.match(/^(\d+[A-Z]?)\s+(.+)\s+([A-Z]?\d+[A-Z]?)$/i);
+      if (m) {
+        const streetWords = m[2].split(' ');
+        const last = streetWords[streetWords.length - 1].replace(/\.$/, '').toUpperCase();
+        const notAfter = (free.not_after || []).map((w) => w.toUpperCase());
+        if (streetWords.length >= (free.min_street_words || 2) && !notAfter.includes(last)) {
+          return { street: `${m[1]} ${m[2]}`, suite: m[3] };
+        }
+      }
+    }
   }
   return { street: text, suite: '' };
 }

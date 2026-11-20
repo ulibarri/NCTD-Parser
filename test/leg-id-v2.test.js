@@ -13,17 +13,17 @@ const { readRules } = require('../src/rules');
 const v2 = (r) => r.destinationRows.map((d) => [d['Passenger Ty'] || '', d['Leg ID'], d['Leg ID V2']]);
 const byType = (r, companion) => r.destinationRows.filter((d) => /(PCA|COM)$/.test(d['Tobi MRN']) === companion);
 
-test('overlay chain v2.11.0 -> v2.10.0 -> v2.9.0 -> v2.8.3 -> v2.8.2 -> v2.8.1 -> v2.8.0 -> v2.7.1 -> v2.7.0 -> v2.6.0 -> v2.5.0 (37 columns, Leg ID V2 after Leg ID, AT-01..AT-84)', () => {
-  assert.equal(rules.specification.version, '2.11.0');
+test('overlay chain v2.12.0 -> v2.11.0 -> v2.10.0 -> v2.9.0 -> v2.8.3 -> v2.8.2 -> v2.8.1 -> v2.8.0 -> v2.7.1 -> v2.7.0 -> v2.6.0 -> v2.5.0 (37 columns, Leg ID V2 after Leg ID, AT-01..AT-87)', () => {
+  assert.equal(rules.specification.version, '2.12.0');
   assert.equal(rules.destination_columns.length, 37);
   assert.deepEqual(rules.destination_columns.slice(0, 3), ['Vendor ID', 'Leg ID', 'Leg ID V2']);
   assert.equal(rules.processing_pipeline[rules.processing_pipeline.indexOf('generate_leg_id') + 1], 'generate_leg_id_v2');
-  assert.deepEqual(rules.acceptance_tests.map((t) => t.id), Array.from({ length: 84 }, (_, i) => `AT-${String(i + 1).padStart(2, '0')}`));
+  assert.deepEqual(rules.acceptance_tests.map((t) => t.id), Array.from({ length: 87 }, (_, i) => `AT-${String(i + 1).padStart(2, '0')}`));
   // v2.5.0 rules are still active
   assert.ok(rules.normalization.source_character_cleanup);
   assert.equal(rules.exceptions.INVALID_CLIENT_NAME_FORMAT, 'error');
   assert.ok(rules.deployment_policy.catalog_versions);
-  assert.deepEqual(rules.specification.changelog.slice(0, 11).map((c) => c.version), ['2.11.0', '2.10.0', '2.9.0', '2.8.3', '2.8.2', '2.8.1', '2.8.0', '2.7.1', '2.7.0', '2.6.0', '2.5.0']);
+  assert.deepEqual(rules.specification.changelog.slice(0, 12).map((c) => c.version), ['2.12.0', '2.11.0', '2.10.0', '2.9.0', '2.8.3', '2.8.2', '2.8.1', '2.8.0', '2.7.1', '2.7.0', '2.6.0', '2.5.0']);
   assert.equal(rules.passenger_catalog.migration_rules.length, 1);
   assert.ok(!Object.keys(rules).some((k) => k.endsWith('_patch')));
 });

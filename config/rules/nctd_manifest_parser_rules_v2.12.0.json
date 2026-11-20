@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "specification": {
+    "id": "nctd-manifest-parser",
+    "name": "NCTD Manifest Parser",
+    "organization": "North County Transit District",
+    "version": "2.12.0",
+    "status": "production",
+    "target_runtime": "Node.js",
+    "updated": "2026-11-19",
+    "extends": {
+      "file": "nctd_manifest_parser_rules_v2.11.0.json",
+      "version": "2.11.0",
+      "merge_strategy": "deep_merge_by_key",
+      "rule": "All v2.11.0 rules remain active. This version changes how the suite is separated from PUAddress and DOAddress."
+    },
+    "description": "v2.12.0 overlay: a trailing unit number also splits after street names without an English suffix (2245 CAMINO VIDA ROBLE 100), and a unit glued to its indicator gets a space (UNIT100 becomes UNIT 100).",
+    "changelog": [
+      {
+        "version": "2.12.0",
+        "date": "2026-11-19",
+        "changes": [
+          "ADDRESS-SUITE-002: a standalone trailing number is the suite also when the street name has no English suffix, as in names in Spanish: 444 N EL CAMINO REAL 81, 3625 VISTA OCEANA 13 and 2245 CAMINO VIDA ROBLE 100 give Suite 81, 13 and 100 (decision 2026-11-19).",
+          "Conditions: the address starts with a house number, the street name has at least 2 words and its last word is not a highway word (HWY, HIGHWAY, ROUTE, RTE, SR, I, INTERSTATE, US, CR, COUNTY, FM, BOX), so HIGHWAY 101 or STATE ROUTE 78 stay whole.",
+          "A unit glued to its indicator is written with a space: UNIT100 becomes UNIT 100, SUITE100 SUITE 100, SPC131 SPC 131, STE5 STE 5. The indicator word and the number stay as received; # units (#21) and units already spaced do not change (decision 2026-11-19).",
+          "The suite keeps the indicator as it comes in the source (UNIT 100 in one file, 100 in another); TOBI is not affected by the difference (Majo, 2026-11-19).",
+          "Added acceptance tests AT-85 to AT-87."
+        ]
+      }
+    ]
+  },
+  "field_rules": {
+    "address_secondary": {
+      "rule_id": "ADDRESS-SUITE-002",
+      "applies_to": ["Pickup Address / Pickup Suite (PUAddress)", "Dropoff Address / Dropoff Suite (DOAddress)"],
+      "glued_indicator_spacing": {
+        "enabled": true,
+        "separator": " ",
+        "applies_to": "Indicator words in secondary_indicators (APT, APARTMENT, STE, SUITE, UNIT, SP, SPC, SPACE) followed directly by the unit number.",
+        "examples": [
+          { "source": "2245 CAMINO VIDA ROBLE UNIT100", "street": "2245 CAMINO VIDA ROBLE", "suite": "UNIT 100" },
+          { "source": "100 SANTA FE DR SUITE100", "street": "100 SANTA FE DR", "suite": "SUITE 100" },
+          { "source": "55 LAS FLORES DR SPC131", "street": "55 LAS FLORES DR", "suite": "SPC 131" }
+        ],
+        "not_changed": "Units after # (#21, # 159), units already spaced (UNIT 196, APT B) and standalone numbers (100)."
+      },
+      "standalone_trailing_unit": {
+        "after_street_suffix": "Kept from v1.4.0: 413 AUTUMN DR 220 gives Suite 220.",
+        "after_street_name_without_suffix": {
+          "enabled": true,
+          "requires_house_number": true,
+          "min_street_words": 2,
+          "not_after": ["HWY", "HIGHWAY", "ROUTE", "RTE", "SR", "I", "INTERSTATE", "US", "CR", "COUNTY", "FM", "BOX"],
+          "suite_value": "The number as received (100).",
+          "examples": [
+            { "source": "444 N EL CAMINO REAL 81", "street": "444 N EL CAMINO REAL", "suite": "81" },
+            { "source": "3625 VISTA OCEANA 13", "street": "3625 VISTA OCEANA", "suite": "13" },
+            { "source": "2245 CAMINO VIDA ROBLE 100", "street": "2245 CAMINO VIDA ROBLE", "suite": "100" },
+            { "source": "1200 STATE ROUTE 78", "street": "1200 STATE ROUTE 78", "suite": "" }
+          ]
+        }
+      },
+      "decided_by": "Majo, 2026-11-19"
+    }
+  },
+  "acceptance_tests_patch": [
+    {
+      "id": "AT-85",
+      "case": "PUAddress 2245 CAMINO VIDA ROBLE 100, 444 N EL CAMINO REAL 81, 3625 VISTA OCEANA 13",
+      "expected": "Pickup Address without the number; Pickup Suite 100, 81 and 13"
+    },
+    {
+      "id": "AT-86",
+      "case": "DOAddress 2245 CAMINO VIDA ROBLE UNIT100, 100 SANTA FE DR SUITE100, 55 LAS FLORES DR SPC131",
+      "expected": "Dropoff Suite UNIT 100, SUITE 100 and SPC 131; # units and spaced units unchanged"
+    },
+    {
+      "id": "AT-87",
+      "case": "1200 STATE ROUTE 78, 500 OLD HIGHWAY 395, 100 MAIN 5",
+      "expected": "Address unchanged and Suite empty (highway word, or only one street word)"
+    }
+  ],
+  "consistency_contract_patch": {
+    "acceptance_test_id_range": "AT-01..AT-87 with no gaps after applying v2.5.0 to v2.12.0"
+  },
+  "acceptance_test_suite": {
+    "rules_version": "2.12.0",
+    "embedded_acceptance_cases": "AT-01 to AT-87"
+  }
+}
