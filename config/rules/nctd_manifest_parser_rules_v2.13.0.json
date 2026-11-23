@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "specification": {
+    "id": "nctd-manifest-parser",
+    "name": "NCTD Manifest Parser",
+    "organization": "North County Transit District",
+    "version": "2.13.0",
+    "status": "production",
+    "target_runtime": "Node.js",
+    "updated": "2026-11-23",
+    "extends": {
+      "file": "nctd_manifest_parser_rules_v2.12.0.json",
+      "version": "2.12.0",
+      "merge_strategy": "deep_merge_by_key",
+      "rule": "All v2.12.0 rules remain active. This version adds one more way to separate the suite from PUAddress and DOAddress."
+    },
+    "description": "v2.13.0 overlay: a single trailing letter is the suite (3300 VISTA WAY A gives Dropoff Address 3300 VISTA WAY and Dropoff Suite A), except for post-directionals N, S, E and W (2732 LOKER AVE W stays whole).",
+    "changelog": [
+      {
+        "version": "2.13.0",
+        "date": "2026-11-23",
+        "changes": [
+          "ADDRESS-SUITE-003: a single trailing letter is the suite. 3300 VISTA WAY A, 1622 BROADWAY A and 1259 NATOMA WAY C give Suite A, A and C (CFS 11.23.26, expected output given by Majo, 2026-11-23).",
+          "Conditions: the address starts with a house number; the letter is not N, S, E or W, because those are post-directionals that belong to the street name (2732 LOKER AVE W, 184 TERRACE DR E); the street has at least 1 word after a leading directional; its last word is not a highway word (HWY, HIGHWAY, ROUTE, RTE, SR, I, INTERSTATE, US, CR, COUNTY, FM, BOX); and the street is not only a street type whose name is the letter (100 AVENUE C, 20 N AVE D stay whole).",
+          "The suite is the letter as received (A). Addresses with an indicator (APT B, #B), a trailing number, or no trailing letter do not change.",
+          "Added acceptance tests AT-88 to AT-90."
+        ]
+      }
+    ]
+  },
+  "field_rules": {
+    "address_secondary": {
+      "rule_id": "ADDRESS-SUITE-003",
+      "standalone_trailing_unit": {
+        "trailing_letter": {
+          "rule_id": "ADDRESS-SUITE-003",
+          "enabled": true,
+          "requires_house_number": true,
+          "letters_not_split": ["N", "S", "E", "W"],
+          "leading_directionals": ["N", "S", "E", "W", "NE", "NW", "SE", "SW"],
+          "min_street_words": 1,
+          "not_after": ["HWY", "HIGHWAY", "ROUTE", "RTE", "SR", "I", "INTERSTATE", "US", "CR", "COUNTY", "FM", "BOX"],
+          "one_word_street_type_not_split": true,
+          "one_word_street_type_note": "When the street (after a leading directional) is a single street-type word (AVENUE, AVE, ST, WAY, ...), the letter is the street name: 100 AVENUE C stays whole.",
+          "suite_value": "The letter as received (A).",
+          "examples": [
+            { "source": "3300 VISTA WAY A", "street": "3300 VISTA WAY", "suite": "A" },
+            { "source": "1622 BROADWAY A", "street": "1622 BROADWAY", "suite": "A" },
+            { "source": "1259 NATOMA WAY C", "street": "1259 NATOMA WAY", "suite": "C" },
+            { "source": "326 S EL CAMINO REAL C", "street": "326 S EL CAMINO REAL", "suite": "C" },
+            { "source": "2732 LOKER AVE W", "street": "2732 LOKER AVE W", "suite": "" },
+            { "source": "100 AVENUE C", "street": "100 AVENUE C", "suite": "" }
+          ]
+        }
+      },
+      "decided_by": "Majo, 2026-11-23"
+    }
+  },
+  "acceptance_tests_patch": [
+    {
+      "id": "AT-88",
+      "case": "DOAddress 3300 VISTA WAY A, 1622 BROADWAY A; PUAddress and DOAddress 1259 NATOMA WAY C (CFS 11.23.26)",
+      "expected": "Address without the letter; Suite A, A and C"
+    },
+    {
+      "id": "AT-89",
+      "case": "2732 LOKER AVE W, 184 TERRACE DR E, 16127 VIA MADERA CIRCA W, 500 MAIN ST N",
+      "expected": "Address unchanged and Suite empty (post-directional)"
+    },
+    {
+      "id": "AT-90",
+      "case": "100 AVENUE C, 20 N AVE D, 77 OLD HWY A, BROADWAY A, 10 OAK ST APT B",
+      "expected": "100 AVENUE C, 20 N AVE D, 77 OLD HWY A and BROADWAY A unchanged with Suite empty; APT B unchanged (indicator rule)"
+    }
+  ],
+  "consistency_contract_patch": {
+    "acceptance_test_id_range": "AT-01..AT-90 with no gaps after applying v2.5.0 to v2.13.0"
+  },
+  "acceptance_test_suite": {
+    "rules_version": "2.13.0",
+    "embedded_acceptance_cases": "AT-01 to AT-90"
+  }
+}

@@ -8,10 +8,10 @@ const { rules, row, run } = require('./helpers');
 
 const addr = (d) => [d['Pickup Address'], d['Pickup Suite'], d['Dropoff Address'], d['Dropoff Suite']];
 
-test('rules: v2.12.0 address secondary', () => {
-  assert.equal(rules.specification.version, '2.12.0');
+test('rules: v2.12.0 address secondary (kept in v2.13.0)', () => {
+  assert.equal(rules.specification.version, '2.13.0');
   const a = rules.field_rules.address_secondary;
-  assert.equal(a.rule_id, 'ADDRESS-SUITE-002');
+  assert.equal(a.rule_id, 'ADDRESS-SUITE-003');
   assert.equal(a.glued_indicator_spacing.enabled, true);
   assert.equal(a.standalone_trailing_unit.after_street_name_without_suffix.min_street_words, 2);
   assert.ok(rules.field_rules.pickup_address.secondary_indicators.includes('standalone trailing unit'), 'v1.4.0 indicators kept');

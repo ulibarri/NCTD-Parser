@@ -136,6 +136,10 @@ const STREET_SUFFIXES = ['ST', 'STREET', 'AVE', 'AVENUE', 'RD', 'ROAD', 'DR', 'D
  *   (2245 CAMINO VIDA ROBLE 100), when the address starts with a house number,
  *   the street name has at least min_street_words words and its last word is
  *   not a highway word (HIGHWAY 101, STATE ROUTE 78 stay whole).
+ *
+ * v2.13.0 ADDRESS-SUITE-003 (standalone_trailing_unit.trailing_letter):
+ * a single trailing letter is also the suite (1622 BROADWAY A); see
+ * trailingLetterUnit.
  */
 function splitAddress(address, indicators, options = {}) {
   const text = collapse(address);
@@ -176,8 +180,35 @@ function splitAddress(address, indicators, options = {}) {
         }
       }
     }
+    const letter = trailingLetterUnit(text, options.standalone_trailing_unit && options.standalone_trailing_unit.trailing_letter);
+    if (letter) return letter;
   }
   return { street: text, suite: '' };
+}
+
+/**
+ * v2.13.0 ADDRESS-SUITE-003: a single trailing letter is the suite
+ * (3300 VISTA WAY A, 1622 BROADWAY A, 1259 NATOMA WAY C), when the address
+ * starts with a house number, the letter is not a post-directional
+ * (LOKER AVE W stays whole), the street has at least min_street_words words
+ * after a leading directional, its last word is not a highway word, and the
+ * street is not just a street type whose name is the letter (AVENUE C).
+ */
+function trailingLetterUnit(text, cfg) {
+  if (!cfg || !cfg.enabled) return null;
+  const m = text.match(cfg.requires_house_number === false
+    ? /^()(.+)\s+([A-Z])$/i
+    : /^(\d+[A-Z]?)\s+(.+)\s+([A-Z])$/i);
+  if (!m) return null;
+  const up = (list) => (list || []).map((w) => String(w).toUpperCase());
+  if (up(cfg.letters_not_split).includes(m[3].toUpperCase())) return null;
+  let words = m[2].split(' ');
+  if (words.length > 1 && up(cfg.leading_directionals).includes(words[0].toUpperCase())) words = words.slice(1);
+  if (words.length < (cfg.min_street_words || 1)) return null;
+  const last = words[words.length - 1].replace(/\.$/, '').toUpperCase();
+  if (up(cfg.not_after).includes(last)) return null;
+  if (cfg.one_word_street_type_not_split !== false && words.length === 1 && STREET_SUFFIXES.includes(last)) return null;
+  return { street: `${m[1]} ${m[2]}`.trim(), suite: m[3] };
 }
 
 /** Amount -> Booking Fare (number > 0, otherwise 0). */
