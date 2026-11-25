@@ -57,6 +57,7 @@
   "sev.info": "información",
   "err.UNSUPPORTED_FORMAT": "Formato no permitido. Usa: {allowed}.",
   "err.MISSING_COLUMNS": "Faltan columnas obligatorias: {missing}.",
+  "err.UNKNOWN_HEADER_FORMAT": "El encabezado del archivo no corresponde a ningún formato conocido (estándar de 29 columnas o CFS de 19 columnas). Respecto al formato más parecido faltan: {missing}.",
   "err.FILE_EMPTY": "El archivo está vacío.",
   "err.FILE_UNREADABLE": "No se pudo leer el archivo.",
   "err.FILE_TOO_LARGE": "El archivo supera el límite de 10 MB.",

@@ -48,6 +48,8 @@ function createApp({ rules = loadRules(), catalogStore = storeFromEnv(), accessK
       destinationColumns: rules.destination_columns,
       catalogMode: catalogStore ? catalogStore.kind : 'csv',
       catalogTable: catalogStore ? catalogStore.table : '',
+      // v2.14.0 UI-LEG-ID-V2-HIDDEN-001: the switches are hidden, their function stays
+      showLegIdV2Controls: Boolean(rules.user_interface && rules.user_interface.leg_id_v2_controls && rules.user_interface.leg_id_v2_controls.visible),
     });
   });
 

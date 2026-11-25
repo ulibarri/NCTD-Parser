@@ -57,6 +57,7 @@
   "sev.info": "info",
   "err.UNSUPPORTED_FORMAT": "Format not allowed. Use: {allowed}.",
   "err.MISSING_COLUMNS": "Required columns are missing: {missing}.",
+  "err.UNKNOWN_HEADER_FORMAT": "The file header does not match any known layout (standard 29 columns or CFS 19 columns). Compared with the closest layout, these are missing: {missing}.",
   "err.FILE_EMPTY": "The file is empty.",
   "err.FILE_UNREADABLE": "The file could not be read.",
   "err.FILE_TOO_LARGE": "The file exceeds the 10 MB limit.",

@@ -9,7 +9,7 @@ const { rules, row, run } = require('./helpers');
 const addr = (d) => [d['Pickup Address'], d['Pickup Suite'], d['Dropoff Address'], d['Dropoff Suite']];
 
 test('rules: v2.12.0 address secondary (kept in v2.13.0)', () => {
-  assert.equal(rules.specification.version, '2.13.0');
+  assert.ok(['2.13.0', '2.14.0'].includes(rules.specification.version));
   const a = rules.field_rules.address_secondary;
   assert.equal(a.rule_id, 'ADDRESS-SUITE-003');
   assert.equal(a.glued_indicator_spacing.enabled, true);

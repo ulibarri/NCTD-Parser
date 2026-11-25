@@ -144,9 +144,11 @@ a.secondary[role=button]:hover { background: rgba(1, 92, 171, .08); }
 /* ===== Summary ===== */
 .summary { margin: .75rem 0; }
 .summary dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .5rem; margin: 0 0 .75rem; }
-.summary dl div { border: 1px solid var(--brand-border); border-radius: 10px; padding: .5rem .75rem; }
+.summary dl div { border: 1px solid var(--brand-border); border-radius: 10px; padding: .5rem .75rem; display: flex; flex-direction: column; }
 .summary dt { font-size: .8rem; color: var(--app-text-muted); font-weight: 400; }
-.summary dd { margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--brand-navy); }
+/* the number sits at the bottom of every card, so a row's numbers stay on one line however long the label is */
+.summary dt { margin-bottom: .25rem; }
+.summary dd { margin: auto 0 0; font-size: 1.25rem; font-weight: 700; color: var(--brand-navy); line-height: 1.2; }
 .summary dl div.wide { grid-column: span 2; }
 .summary dd small { font-size: .8rem; font-weight: 400; color: var(--app-text-muted); margin-left: .35rem; }
 .summary ul { margin: 0 0 .5rem 1.1rem; font-size: .92rem; }

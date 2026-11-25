@@ -547,10 +547,14 @@
     el.hidden = false;
     el.className = 'export-status ' + (ready ? 'ok' : 'blocked');
     el.textContent = ready ? t('s2.exportReady') : t('s2.exportBlocked', { count: state.job.summary.blockingErrors });
-    const mode = document.createElement('span');
-    mode.className = 'mode';
-    mode.textContent = state.job.summary.legIdV2Mode ? t('v2.modeOn', { name: state.job.summary.legIdV2ModeName }) : t('v2.modeOff');
-    el.append(mode);
+    // v2.14.0: with the Leg ID V2 switches hidden, the standard-mode line is not shown either
+    const controlsShown = !$('legIdV2Controls').hidden;
+    if (controlsShown || state.job.summary.legIdV2Mode) {
+      const mode = document.createElement('span');
+      mode.className = 'mode';
+      mode.textContent = state.job.summary.legIdV2Mode ? t('v2.modeOn', { name: state.job.summary.legIdV2ModeName }) : t('v2.modeOff');
+      el.append(mode);
+    }
     const seq = state.job.summary.legIdV2Sequence;
     if (seq && seq.first) {
       const info = document.createElement('span');

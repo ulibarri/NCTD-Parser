@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "specification": {
+    "id": "nctd-manifest-parser",
+    "name": "NCTD Manifest Parser",
+    "organization": "North County Transit District",
+    "version": "2.14.0",
+    "status": "production",
+    "target_runtime": "Node.js",
+    "updated": "2026-11-25",
+    "extends": {
+      "file": "nctd_manifest_parser_rules_v2.13.0.json",
+      "version": "2.13.0",
+      "merge_strategy": "deep_merge_by_key",
+      "rule": "All v2.13.0 rules remain active. This version accepts a second header layout for Viajes and hides the Leg ID V2 controls from the user."
+    },
+    "description": "v2.14.0 overlay: Viajes can come with the standard 29-column header or with the CFS 19-column header received since Nov 20, 2026; the App detects the layout on its own and gives an error only when the header matches neither. The Leg ID V2 experimental and sequential controls are hidden from the user; their function stays in the App.",
+    "changelog": [
+      {
+        "version": "2.14.0",
+        "date": "2026-11-25",
+        "changes": [
+          "HEADER-PROFILES-001: two header layouts are accepted for Viajes. NCTD_STANDARD_29 is the layout used until now (Client Name, Client ID, TripDate, PUTime ... Run Name). CFS_19 is the layout of the files of Nov 20 and Nov 24, 2026 (Client  Name, Client ID #, Date, Time, PU ADDRESS ... Notes), which NCTD confirmed is the one it will send from now on (Majo, 2026-11-25).",
+          "The App detects the layout on its own; the user does nothing different. Headers are compared by their letters and digits only, ignoring case, spaces and punctuation (Client  Name = Client Name, DR Appt. = DRAPPT).",
+          "CFS_19: each header is read as its standard column (Client ID # as Client ID, Date as TripDate, Time as PUTime, DR Appt. as DOAppt, Notes as Comments ...). Run Name comes in a column without header, whose position changes (T on Nov 20, AB on Nov 24): it is the first column without header that has values. The 9 standard columns that CFS_19 does not have (Assisted, NoClients, PULat, PULon, DOLat, DOLon, Subtype, FareType, CashTck) are read as empty.",
+          "A header that matches neither layout gives the error UNKNOWN_HEADER_FORMAT, which names the columns missing from the closest layout. It replaces MISSING_COLUMNS for Viajes.",
+          "UI-LEG-ID-V2-HIDDEN-001: the switches Modo experimental Leg ID V2 and Asignar números consecutivos a Leg ID V2 are hidden from the user. Their function is not removed: the API still accepts legIdV2Mode and legIdV2Sequential, and showing them again is a change of user_interface.leg_id_v2_controls.visible to true (Majo, 2026-11-25).",
+          "Added acceptance tests AT-91 to AT-94."
+        ]
+      }
+    ]
+  },
+  "source_header_profiles": {
+    "rule_id": "HEADER-PROFILES-001",
+    "applies_to": "Viajes (XLSX or CSV)",
+    "header_comparison": "Letters and digits only, case-insensitive (Client  Name = Client Name; Client ID # = Client ID; DR Appt. = DRAPPT).",
+    "standard_profile_id": "NCTD_STANDARD_29",
+    "standard_profile": "The header of source_columns; it is matched first and needs the same required columns as before.",
+    "alternate_profiles": [
+      {
+        "id": "CFS_19",
+        "description": "CFS layout received since Nov 20, 2026 (files of Nov 20 and Nov 24). Every header listed here must be present.",
+        "columns": {
+          "Client Name": "Client  Name",
+          "Client ID": "Client ID #",
+          "TripDate": "Date",
+          "PUTime": "Time",
+          "PUAddress": "PU ADDRESS",
+          "PUCity": "PU City",
+          "PUZipcode": "PU Zip",
+          "DOAddress": "DO ADDRESS",
+          "DOCity": "DO City",
+          "DOZipcode": "DO Zip",
+          "DNLA": "DNLA",
+          "MapQMiles": "Miles",
+          "PickUpLocationName": "PU Location Name",
+          "DropLocationName": "DO Location Name",
+          "Passenger Ty": "Passenger Type",
+          "Space Type": "Space Type",
+          "Amount": "Amount",
+          "DOAppt": "DR Appt.",
+          "Comments": "Notes"
+        },
+        "unheaded_column": {
+          "target": "Run Name",
+          "rule": "The first column without header that has at least one value, wherever it is (T on Nov 20, AB on Nov 24). If there is none, Run Name is empty."
+        },
+        "absent_columns_read_as_empty": ["Assisted", "NoClients", "PULat", "PULon", "DOLat", "DOLon", "Subtype", "FareType", "CashTck"]
+      }
+    ],
+    "no_match": {
+      "error": "UNKNOWN_HEADER_FORMAT",
+      "severity": "blocking",
+      "message": "The header does not match any known layout; the error names the columns missing from the closest layout."
+    },
+    "invalid_trips": "Invalid Trips keeps the headers and values as received; Run Name is added as the header of the unheaded column."
+  },
+  "user_interface": {
+    "leg_id_v2_controls": {
+      "rule_id": "UI-LEG-ID-V2-HIDDEN-001",
+      "visible": false,
+      "controls": ["Modo experimental Leg ID V2", "Asignar números consecutivos a Leg ID V2"],
+      "function_kept": "Hidden from the user only. POST /api/jobs still accepts legIdV2Mode and legIdV2Sequential; Leg ID V2 keeps being generated as in non-experimental mode (equal to Leg ID).",
+      "decided_by": "Majo, 2026-11-25"
+    }
+  },
+  "acceptance_tests_patch": [
+    {
+      "id": "AT-91",
+      "case": "Viajes with the CFS_19 header (CFS_11.24.26.xlsx, Run Name in column AB)",
+      "expected": "Accepted without error; same Output as the same trips in the standard header"
+    },
+    {
+      "id": "AT-92",
+      "case": "Viajes with the CFS_19 header and Run Name in column T (CFS_11.20.26_SOURCE.xlsx)",
+      "expected": "Accepted; Run Name read from the unheaded column; Assisted and the other absent columns read as empty"
+    },
+    {
+      "id": "AT-93",
+      "case": "Viajes whose header matches neither layout (for example a CFS_19 file without Notes)",
+      "expected": "Error UNKNOWN_HEADER_FORMAT naming Notes as missing"
+    },
+    {
+      "id": "AT-94",
+      "case": "Main page",
+      "expected": "The Leg ID V2 experimental and sequential switches are not shown; the API still accepts legIdV2Mode"
+    }
+  ],
+  "consistency_contract_patch": {
+    "acceptance_test_id_range": "AT-01..AT-94 with no gaps after applying v2.5.0 to v2.14.0"
+  },
+  "acceptance_test_suite": {
+    "rules_version": "2.14.0",
+    "embedded_acceptance_cases": "AT-01 to AT-94"
+  }
+}

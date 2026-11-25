@@ -103,10 +103,11 @@ function createApiRouter({ rules, uploads, jobs, catalogStore = null, accessKey 
         expectedColumns: rules.source_columns,
         requiredColumns: viajesRequiredColumns(rules),
         allowedExtensions: rules.file_contract.accepted_source_formats,
+        headerProfiles: rules.source_header_profiles, // v2.14.0 HEADER-PROFILES-001
       });
       const tripDates = distinctTripDates(table.rows);
       const uploadId = uploads.add({ kind: 'viajes', filename: req.file.originalname, table, tripDates });
-      res.json({ uploadId, filename: req.file.originalname, columns: table.headers, rows: rowsAsObjects(table), rowCount: table.rows.length, tripDates });
+      res.json({ uploadId, filename: req.file.originalname, headerProfile: table.profile, columns: table.headers, rows: rowsAsObjects(table), rowCount: table.rows.length, tripDates });
     } catch (err) {
       next(err);
     }
